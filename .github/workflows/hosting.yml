@@ -1,0 +1,38 @@
+name: Ready-to-extract hosting ZIP
+on:
+  push:
+    branches: ['arena/6064a944-forsah']
+    paths:
+      - 'deployment/hosting*'
+      - 'deployment/INSTALL.txt'
+      - 'scripts/package-hosting.py'
+      - 'backend/**'
+      - '.github/workflows/hosting.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  hosting:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, mbstring, gd
+          coverage: none
+      - run: npm ci
+      - run: npm run build
+      - run: php -l deployment/hosting-auto.php && php -l backend/config-loader.php
+      - run: python3 scripts/package-hosting.py
+      - run: python3 scripts/run-checked.py python3 backend/tests/hosting.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forsah-hosting-ready
+          path: artifacts/forsah-hosting-ready.zip
+          if-no-files-found: error

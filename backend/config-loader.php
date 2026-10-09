@@ -9,3 +9,11 @@ if (is_file($configPath)) {
         if (isset($config[$key]) && is_string($config[$key])) putenv($key.'='.$config[$key]);
     }
 }
+// Present only in the ready-to-extract hosting bundle. Explicit/private
+// configuration takes precedence over automatic initialization.
+if (!getenv('FORSAH_DB_PATH') && is_file(__DIR__ . '/hosting-auto.php')) {
+    require_once __DIR__ . '/hosting-auto.php';
+}
+if (empty($_SERVER['HTTP_AUTHORIZATION']) && !empty($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+    $_SERVER['HTTP_AUTHORIZATION'] = $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+}

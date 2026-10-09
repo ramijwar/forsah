@@ -1,0 +1,27 @@
+# Apache 2.4 / compatible LiteSpeed. Never place live user data in this directory.
+Options -Indexes -MultiViews
+DirectoryIndex index.html
+AddDefaultCharset UTF-8
+SetEnvIfNoCase Authorization "(.+)" HTTP_AUTHORIZATION=$1
+
+<FilesMatch "^(market|config-loader|hosting-auto|bootstrap-admin|config|config\.example)\.php$">
+    Require all denied
+</FilesMatch>
+<FilesMatch "(^\.|\.(sqlite|sqlite-shm|sqlite-wal|sqlite-journal|db|zip|log|bak|env|ini|sql)$)">
+    Require all denied
+</FilesMatch>
+
+RewriteEngine On
+# Deny internal directories before SPA routing.
+RewriteRule ^(?:database|private|tools|var|backend|\.git)(?:/|$) - [F,L,NC]
+# Preserve bearer authentication through Apache/PHP-FPM configurations.
+RewriteCond %{HTTP:Authorization} .
+RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+# Compatibility with an older client that appended a slash after api.php.
+RewriteRule ^api\.php/$ api.php [L,QSA]
+# Do not redirect API errors to HTML. HashRouter needs no special routes,
+# but this fallback also makes bookmarked web navigation predictable.
+RewriteCond %{REQUEST_URI} !/api\.php [NC]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.html [L]
