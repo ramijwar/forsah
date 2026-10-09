@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">فرصة</string>
+    <string name="title_activity_main">فرصة</string>
+    <string name="package_name">com.abdulrazzaq.forsah</string>
+    <string name="custom_url_scheme">com.abdulrazzaq.forsah</string>
+</resources>

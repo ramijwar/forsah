@@ -1,0 +1,9 @@
+{
+  "appId": "com.abdulrazzaq.forsah",
+  "appName": "فرصة",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": false
+  }
+}

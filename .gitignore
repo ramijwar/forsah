@@ -1,0 +1,17 @@
+node_modules
+dist
+.vite
+*.tsbuildinfo
+.env*
+!.env.example
+backend/data/
+var/
+__pycache__/
+*.pyc
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+artifacts/
+*.jks
+*.keystore
+coverage/

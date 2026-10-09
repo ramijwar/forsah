@@ -1,0 +1,104 @@
+name: Android APK
+on:
+  push:
+    branches: ['arena/6064a944-forsah']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  VITE_API_BASE_URL: https://t3lam.site/forsah/api.php
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, mbstring
+          coverage: none
+      - run: npm ci
+      - run: npm test
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run build
+      - run: php -l backend/api.php && php -l backend/bootstrap-admin.php
+      - run: python3 backend/tests/smoke.py
+  live-server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check deployed API (read only)
+        run: node scripts/check-server.mjs
+  apk:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - run: npm ci
+      - run: npm run cap:sync
+      - name: Build and validate Android
+        working-directory: android
+        run: ./gradlew --no-daemon assembleDebug lintDebug testDebugUnitTest
+      - name: Verify APK signature and checksum
+        run: |
+          mkdir -p artifacts
+          cp android/app/build/outputs/apk/debug/app-debug.apk artifacts/forsah-debug.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose artifacts/forsah-debug.apk
+          cd artifacts && sha256sum forsah-debug.apk > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forsah-debug-apk
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-test-reports
+          path: |
+            android/app/build/reports/
+            android/app/build/test-results/
+  summary:
+    if: always()
+    needs: [validate, live-server, apk]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report build and deployment separately
+        env:
+          VALIDATION: ${{ needs.validate.result }}
+          LIVE: ${{ needs.live-server.result }}
+          APK: ${{ needs.apk.result }}
+        run: |
+          {
+            echo '## Forsah verification'
+            echo "- Local application/API tests: $VALIDATION"
+            echo "- Production API readiness: $LIVE"
+            echo "- Debug APK build: $APK"
+            echo '- APK uses https://t3lam.site/forsah/api.php'
+            echo '- Debug signing is for testing, not a production release.'
+            echo '- A successful APK build does not mean the production server is deployed or all product features exist.'
+          } >> "$GITHUB_STEP_SUMMARY"
