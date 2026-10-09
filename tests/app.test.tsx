@@ -73,3 +73,8 @@ it('renders real support replies for the signed-in account',async()=>{
   });
   mount('/ticket/2');expect(await screen.findByText('Actual support reply')).toBeTruthy();
 });
+it('restored service cards filter real marketplace listings',async()=>{
+  mount();await screen.findByRole('heading',{name:'تصفّح الخدمات'});
+  await userEvent.setup().click(screen.getByRole('button',{name:/الحراج الشعبي.*تصفح الإعلانات/}));
+  await waitFor(()=>expect(api).toHaveBeenCalledWith('market',expect.anything(),expect.objectContaining({action:'list',category:'الحراج الشعبي'})));
+});

@@ -7,6 +7,12 @@ on:
       - 'deployment/INSTALL.txt'
       - 'scripts/package-hosting.py'
       - 'backend/**'
+      - 'src/**'
+      - 'scripts/check-assets.mjs'
+      - 'scripts/browser-smoke.mjs'
+      - 'public/**'
+      - 'package*.json'
+      - 'vite.config.ts'
       - '.github/workflows/hosting.yml'
   workflow_dispatch:
 permissions:
@@ -27,7 +33,14 @@ jobs:
           extensions: pdo_sqlite, mbstring, gd
           coverage: none
       - run: npm ci
+      - run: npm test
       - run: npm run build
+      - run: python3 scripts/run-checked.py node scripts/browser-smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-review
+          path: artifacts/visual/
       - run: php -l deployment/hosting-auto.php && php -l backend/config-loader.php
       - run: python3 scripts/package-hosting.py
       - run: python3 scripts/run-checked.py python3 backend/tests/hosting.py
@@ -40,4 +53,5 @@ jobs:
           path: |
             artifacts/forsah-hosting-ready.zip
             artifacts/forsah-hosting-fix.zip
+            artifacts/forsah-ui-update.zip
           if-no-files-found: error

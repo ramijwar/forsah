@@ -13,6 +13,10 @@ def main():
     if not (ROOT / 'dist/index.html').is_file():
         raise SystemExit('Run npm run build first')
     OUT.parent.mkdir(exist_ok=True)
+    with ZipFile(OUT.parent / 'forsah-ui-update.zip', 'w', ZIP_DEFLATED) as ui:
+        for file in sorted((ROOT / 'dist').rglob('*')):
+            if file.is_file(): ui.write(file, str(file.relative_to(ROOT / 'dist')))
+
     with tempfile.TemporaryDirectory(prefix='forsah-seed-') as temp:
         seed = Path(temp) / 'forsah.seed.sqlite'
         connection = sqlite3.connect(seed)

@@ -1,3 +1,4 @@
+import { Sparkles, Settings, MessageCircle, Heart, Home, Tag, Search, UserRound, Plus, ArrowLeft, ChevronLeft, Gavel, UsersRound, Truck, Zap, Armchair, PackageCheck, Wrench, CircleHelp } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { App as NativeApp } from '@capacitor/app';
@@ -17,6 +18,15 @@ type Translate = (ar: string, en: string) => string;
 const categories = [
   ['الحراج الشعبي','Marketplace'], ['سوق العمالة','Workers'], ['المواصلات والنقل الداخلي','Transport'],
   ['طوارئ السيارات','Roadside assistance'], ['المفروشات والموبيليا','Furniture'], ['الخدمات اللوجستية','Logistics'], ['خدمات الصيانة المنزلية','Home maintenance'],
+];
+const categoryAppearance = [
+  { icon:Gavel, color:'#9a5b31', tint:'#f7eadf', ar:'بيع وشراء.. ولقطة اليوم تنتظرك', en:'Buy, sell and discover something special' },
+  { icon:UsersRound, color:'#3d7290', tint:'#e6f1f5', ar:'أيدٍ خبيرة لخدماتك اليومية', en:'Skilled people for everyday services' },
+  { icon:Truck, color:'#98702d', tint:'#f6f0de', ar:'مشاوير ونقل بين أحياء مدينتك', en:'Rides and transport around your city' },
+  { icon:Zap, color:'#ca6246', tint:'#fbe9e4', ar:'مساعدة على الطريق وقت الحاجة', en:'Roadside assistance when you need it' },
+  { icon:Armchair, color:'#90617e', tint:'#f3eaf1', ar:'لمسات جديدة لبيتك ومساحتك', en:'Something new for your home' },
+  { icon:PackageCheck, color:'#3b826a', tint:'#e5f2ec', ar:'توصيل سريع.. من الباب للباب', en:'Deliveries from door to door' },
+  { icon:Wrench, color:'#526fa0', tint:'#e9edf7', ar:'فنيون وخدمات لصيانة منزلك', en:'Find home maintenance services' },
 ];
 const stored = <T,>(key: string, fallback: T): T => { try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback; } catch { return fallback; } };
 const persist = (key: string, value: unknown) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* private browsing/storage quota */ } };
@@ -108,9 +118,9 @@ export default function App() {
   useEffect(() => {
     if(!ready)return;
     const controller=new AbortController();const options={signal:controller.signal};setLoading(true);let task:Promise<unknown>=Promise.resolve();
-    if(['market','mine','favorites'].includes(view)) {
-      if(view!=='market' && !user){setList([]);setLoading(false);return;}
-      setList([]);task=api<Page>('market',view==='market'?'list':view,options,{q:query,category,page:String(page)}).then(data=>{setList(data.items);setMore(data.has_more);});
+    if(['market','search','mine','favorites'].includes(view)) {
+      if(!['market','search'].includes(view) && !user){setList([]);setLoading(false);return;}
+      setList([]);task=api<Page>('market',['market','search'].includes(view)?'list':view,options,{q:query,category,page:String(page)}).then(data=>{setList(data.items);setMore(data.has_more);});
     } else if(view==='ad' && id) {setAd(null);task=api<Ad>('market','detail',options,{id:String(id)}).then(setAd);}
     else if(view==='messages' && user) task=api<Chat[]>('chat','list',options).then(setChats);
     else if(view==='support' && user) task=api<Ticket[]>('member-support','list',options).then(setTickets);
@@ -139,19 +149,33 @@ export default function App() {
     if(native && savedBiometric){await SessionVault.clear();setSavedBiometric(false);}
     saveToken(result.token);setPassword('');go('/');
   });
-  const requireLogin = !user && !['market','ad','account','settings','admin'].includes(view);
+  const requireLogin = !user && !['market','search','ad','account','settings','admin'].includes(view);
   const dark = theme==='dark'||(theme==='system'&&systemDark);
   if(view==='admin')return <><button className="market-admin-back" onClick={()=>go('/')}>{t('العودة للتطبيق','Back to app')}</button><AdminDashboard/></>;
   return <div className={`market-app ${dark?'night':''} ${style==='classic'?'classic':''}`} dir={language==='ar'?'rtl':'ltr'}>
-    <header className="market-header"><button className="market-brand" onClick={()=>go('/')}>◈ {t('فرصة','Forsah')}</button><div><button onClick={()=>go('/support')}>{t('الدعم','Support')}</button><button onClick={()=>go('/settings')}>{t('الإعدادات','Settings')}</button></div></header>
+    <header className="market-header"><button className="market-brand" onClick={()=>go('/')} aria-label={t('العودة إلى الرئيسية','Go home')}><span className="brand-mark"><Sparkles size={20}/></span><span><strong>{t('فرصة','Forsah')}</strong><small>{t('كل شيء يبدأ بفرصة','Everything starts with an opportunity')}</small></span></button><div className="market-header-actions"><button aria-label={t('المفضلة','Favorites')} onClick={()=>go('/favorites')}><Heart size={19}/></button><button aria-label={t('الرسائل','Messages')} onClick={()=>go('/messages')}><MessageCircle size={19}/></button><button aria-label={t('الإعدادات','Settings')} onClick={()=>go('/settings')}><Settings size={19}/></button></div></header>
     <main className="market-main">
       {error&&<div role="alert" className="market-error">{error}<button onClick={()=>{setError('');setRevision(v=>v+1);}}>{t('إعادة المحاولة','Retry')}</button></div>}
       {notice&&<div role="status" className="market-notice">{notice}</div>}
       {(!ready||loading)&&<p role="status">{t('جار التحميل…','Loading…')}</p>}
       {requireLogin&&<section className="market-panel"><h1>{t('سجّل دخولك أولًا','Please sign in')}</h1><p>{t('لحماية بياناتك، تتطلب هذه الخدمة حسابًا.','An account is required to protect your data.')}</p><button className="market-primary" onClick={()=>go('/account')}>{t('الدخول أو إنشاء حساب','Sign in or register')}</button></section>}
       {!requireLogin&&<>
-        {['market','mine','favorites'].includes(view)&&<>
-          <section className="market-hero"><p>{t('خدمات وفرص من مجتمعك','Services and opportunities from your community')}</p><h1>{view==='mine'?t('إعلاناتي','My listings'):view==='favorites'?t('المفضلة','Favorites'):t('اكتشف فرصتك القادمة','Find your next opportunity')}</h1><button className="market-primary" onClick={()=>go('/new')}>+ {t('أضف إعلانًا','Create a listing')}</button></section>
+        {['market','search','mine','favorites'].includes(view)&&<>
+          {view==='market'?<>
+            <section className="market-hero hero-panel">
+              <div className="hero-orb hero-orb-one" aria-hidden="true"/><div className="hero-orb hero-orb-two" aria-hidden="true"/>
+              <div className="forsah-hero-content"><span className="forsah-hero-badge"><Sparkles size={13}/>{t('منصتك المحلية لكل احتياج','Your local services platform')}</span>
+                <h1>{t('خلّها فرصة..','An opportunity..')} <em>{t('لشيء أحلى','for something better')}</em></h1>
+                <p>{t('اكتشف خدمات قريبة منك، أو اعرض خدمتك ووصل للي يبحث عنها.','Discover local services, or offer yours to people looking for them.')}</p>
+                <div className="forsah-hero-actions"><button className="market-primary" onClick={()=>go('/new')}><Plus size={17}/>{t('أضف إعلانك','Create a listing')}</button><button className="forsah-hero-link" onClick={()=>go('/search')}>{t('اكتشف الخدمات','Explore services')}<ArrowLeft size={15}/></button></div>
+              </div>
+              <div className="hero-illustration" aria-hidden="true"><span className="hero-sun"/><span className="hero-card"><Sparkles size={25}/><span>{t('فرصتك','Your next')}<br/>{t('قريبة','opportunity')}</span></span><span className="hero-plant"/></div>
+            </section>
+            <section className="forsah-services" aria-label={t('تصفح الخدمات','Browse services')}><div className="forsah-section-heading"><div><span className="eyebrow">{t('اختَر ما يناسبك','Find what suits you')}</span><h2>{t('تصفّح الخدمات','Browse services')}</h2></div><button onClick={()=>go('/search')}>{t('عرض الكل','View all')}<ArrowLeft size={14}/></button></div>
+              <div className="forsah-category-grid">{categories.map(([ar,en],i)=>{const appearance=categoryAppearance[i];const Icon=appearance.icon;return <button key={ar} className="forsah-category-card" onClick={()=>{setCategory(ar);setPage(1);setQuery('');setSearch('');navigate('/search');}}><span className="forsah-category-top"><span className="category-icon" style={{color:appearance.color,background:appearance.tint}}><Icon size={21} strokeWidth={1.8}/></span><span className="forsah-category-copy"><strong>{t(ar,en)}</strong><small>{t(appearance.ar,appearance.en)}</small></span><ChevronLeft size={16}/></span><span className="forsah-category-chip">{t('تصفح الإعلانات','Browse listings')}</span></button>;})}</div>
+            </section>
+            <div className="forsah-section-heading"><div><span className="eyebrow">{t('من مجتمع فرصة','From the Forsah community')}</span><h2>{t('الإعلانات المنشورة','Published listings')}</h2></div></div>
+          </>:<div className="forsah-page-heading"><span className="eyebrow">{t('كل شيء يبدأ بفرصة','Everything starts with an opportunity')}</span><h1>{view==='mine'?t('إعلاناتي','My listings'):view==='favorites'?t('المفضلة','Favorites'):t('البحث','Search')}</h1><button className="market-primary" onClick={()=>go('/new')}><Plus size={16}/>{t('أضف إعلانًا','Create a listing')}</button></div>}
           <form className="market-search" onSubmit={submitSearch}><input aria-label={t('البحث','Search')} maxLength={120} value={search} onChange={e=>setSearch(e.target.value)} placeholder={t('ابحث في الإعلانات الفعلية…','Search real listings…')}/><button className="market-primary">{t('بحث','Search')}</button></form>
           <div className="market-filters"><button aria-pressed={!category} onClick={()=>{setCategory('');setPage(1);}}>{t('الكل','All')}</button>{categories.map(([ar,en])=><button key={ar} aria-pressed={category===ar} onClick={()=>{setCategory(ar);setPage(1);}}>{t(ar,en)}</button>)}</div>
           {!!history.length&&<details><summary>{t('عمليات البحث الأخيرة (على هذا الجهاز)','Recent searches (on this device)')}</summary><div className="market-filters">{history.map(q=><button key={q} onClick={()=>{setSearch(q);setQuery(q);setPage(1);}}>{q}</button>)}<button onClick={()=>{setHistory([]);persist('forsah-search-history',[]);}}>{t('مسح السجل','Clear history')}</button></div></details>}
@@ -195,6 +219,13 @@ export default function App() {
         </section>}
       </>}
     </main>
-    <nav className="market-nav" aria-label={t('التنقل الرئيسي','Main navigation')}>{[['/','◈',t('الرئيسية','Home')],['/favorites','♡',t('المفضلة','Saved')],['/mine','▤',t('إعلاناتي','My ads')],['/messages','✉',t('الرسائل','Messages')],['/account','◎',t('حسابي','Account')]].map(([path,icon,label])=><button key={path} aria-current={location.pathname===path?'page':undefined} onClick={()=>go(path)}><span>{icon}</span>{label}</button>)}</nav>
+    <nav className="market-nav" aria-label={t('التنقل الرئيسي','Main navigation')}>{[
+      {path:'/',icon:Home,label:t('الرئيسية','Home')},
+      {path:'/messages',icon:MessageCircle,label:t('رسائلي','Messages')},
+      {path:'/mine',icon:Tag,label:t('إعلاناتي','My ads')},
+      {path:'/search',icon:Search,label:t('البحث','Search')},
+      {path:'/account',icon:UserRound,label:t('حسابي','Account')},
+    ].map(({path,icon:Icon,label})=><button key={path} aria-current={location.pathname===path?'page':undefined} onClick={()=>go(path)}><span><Icon size={20}/></span>{label}</button>)}</nav>
+    <button className="forsah-support-link" aria-label={t('الدعم الفني','Support')} onClick={()=>go('/support')}><CircleHelp size={18}/>{t('تحتاج مساعدة؟','Need help?')}</button>
   </div>;
 }
