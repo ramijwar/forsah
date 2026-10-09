@@ -12,11 +12,11 @@ env:
   VITE_API_BASE_URL: https://t3lam.site/forsah/api.php
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: npm
@@ -32,37 +32,37 @@ jobs:
       - run: php -l backend/api.php && php -l backend/bootstrap-admin.php
       - run: python3 backend/tests/smoke.py
   live-server:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
       - name: Check deployed API (read only)
         run: node scripts/check-server.mjs
   apk:
     needs: validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: npm
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
-      - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
-      - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Use runner Android SDK
+        run: python3 scripts/run-checked.py sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
       - run: npm ci
       - run: npm run cap:sync
       - name: Build and validate Android
         working-directory: android
-        run: ./gradlew --no-daemon assembleDebug lintDebug testDebugUnitTest
+        run: python3 ../scripts/run-checked.py ./gradlew --no-daemon assembleDebug lintDebug testDebugUnitTest
       - name: Verify APK signature and checksum
         run: |
           mkdir -p artifacts
@@ -85,7 +85,7 @@ jobs:
   summary:
     if: always()
     needs: [validate, live-server, apk]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Report build and deployment separately
         env:
