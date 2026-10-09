@@ -18,17 +18,19 @@ try{
  const page=await browser.newPage({viewport:{width:390,height:844}});
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  const missing=[];page.on('response',r=>{if(r.status()>=400)missing.push(r.url());});
- await page.route('https://t3lam.site/**',route=>route.fulfill({json:{ok:true,data:{items:[],has_more:false}}}));
+ await page.route('https://t3lam.site/**',route=>route.fulfill({headers:{'Access-Control-Allow-Origin':'*'},json:{ok:true,data:{items:[],has_more:false}}}));
  mkdirSync('artifacts/visual',{recursive:true});
  for(const folder of ['/','/forsah/','/nested/demo/']){
    await page.goto(`http://127.0.0.1:${server.address().port}${folder}`,{waitUntil:'networkidle'});
    await page.getByRole('heading',{name:'تصفّح الخدمات'}).waitFor();
    await page.evaluate(()=>document.fonts.ready);
+   if(await page.getByRole('alert').count())throw new Error(await page.getByRole('alert').innerText());
    if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw new Error(`Horizontal overflow at ${folder}`);
    console.log('PASS Chromium mobile layout, JS/CSS/font loading:',folder);
  }
  await page.screenshot({path:'artifacts/visual/home-mobile.png',fullPage:true});
  await page.getByRole('button',{name:'الإعدادات',exact:true}).click();
+ await page.getByRole('heading',{name:'الإعدادات',exact:true}).waitFor();
  await page.getByLabel('اللغة',{exact:true}).selectOption('en');
  await page.getByLabel('Theme',{exact:true}).selectOption('dark');
  await page.getByRole('button',{name:'Go home',exact:true}).click();
