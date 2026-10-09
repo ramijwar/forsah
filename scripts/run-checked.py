@@ -5,7 +5,11 @@ import subprocess
 import sys
 
 lines = collections.deque(maxlen=45)
-process = subprocess.Popen(sys.argv[1:], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+try:
+    process = subprocess.Popen(sys.argv[1:], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+except OSError as error:
+    print(f'::error title=Cannot start build command::{error}')
+    sys.exit(1)
 for line in process.stdout:
     print(line, end='', flush=True)
     lines.append(line)

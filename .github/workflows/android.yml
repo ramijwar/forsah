@@ -57,7 +57,7 @@ jobs:
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
       - name: Use runner Android SDK
-        run: python3 scripts/run-checked.py sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+        run: python3 scripts/run-checked.py "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-36' 'build-tools;36.0.0'
       - run: npm ci
       - run: npm run cap:sync
       - name: Build and validate Android
