@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-/** Drop-in package only: the public seed is never the live database. */
+/** Drop-in package: local database directory must be denied by the web server. */
 function initializeHostingDatabase(): void {
     if (getenv('FORSAH_DB_PATH')) return;
     $configuredRoot = getenv('FORSAH_WEB_ROOT') ?: ($_SERVER['DOCUMENT_ROOT'] ?? '');
@@ -17,22 +17,25 @@ function initializeHostingDatabase(): void {
     for ($dir = $root; dirname($dir) !== $dir; $dir = dirname($dir)) {
         if (in_array(strtolower(basename($dir)), ['public_html','httpdocs','htdocs','wwwroot'], true)) $boundary = $dir;
     }
-    $private = dirname($boundary) . '/forsah-private';
+    $previousPrivate = dirname($boundary) . '/forsah-private';
+    $private = __DIR__ . '/database';
     if (is_link($private)) throw new RuntimeException('Private database directory must not be a symlink');
     umask(0077);
     if (!is_dir($private) && !@mkdir($private, 0700, true) && !is_dir($private)) {
-        throw new RuntimeException('Cannot create private database directory. Configure FORSAH_DB_PATH outside the public web root.');
+        throw new RuntimeException('Cannot create writable database directory inside the application');
     }
     $private = realpath($private);
-    if (!$private || str_starts_with($private . '/', rtrim($boundary, '/') . '/')) throw new RuntimeException('Unsafe private database path');
+    if (!$private) throw new RuntimeException('Invalid database directory');
     $path = $private . '/forsah.sqlite';
+    if (!protectedHostingDatabase($path)) throw new RuntimeException('Database access protection is not active. Use the supplied .htaccess files on Apache/LiteSpeed.');
+    @chmod($private, 0700);
     $lock = @fopen($private . '/install.lock', 'c');
     if (!$lock || !flock($lock, LOCK_EX)) throw new RuntimeException('Cannot lock database initialization');
     try {
         if (!file_exists($path)) {
             // Do not silently create a fresh identity store when upgrading a
             // legacy installation. Point at/migrate its DB explicitly instead.
-            foreach ([__DIR__.'/var/forsah.sqlite', dirname(__DIR__).'/var/forsah.sqlite', __DIR__.'/database/forsah.sqlite'] as $legacy) {
+            foreach ([__DIR__.'/var/forsah.sqlite', dirname(__DIR__).'/var/forsah.sqlite', $previousPrivate.'/forsah.sqlite', $previousPrivate.'/config.php'] as $legacy) {
                 if (is_file($legacy)) throw new RuntimeException('Existing legacy database detected. Configure FORSAH_DB_PATH; do not replace your users.');
             }
             $seed = __DIR__ . '/database/forsah.seed.sqlite';
@@ -63,6 +66,6 @@ try {
     http_response_code(503);
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store');
-    echo json_encode(['ok'=>false, 'error'=>'تعذر إعداد قاعدة البيانات الخاصة. راجع سجل PHP وملف INSTALL.txt؛ يلزم مسار قابل للكتابة خارج المجلد العام.'], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok'=>false, 'error'=>'تعذر إعداد القاعدة المحلية. تأكد من تفعيل .htaccess وصلاحية الكتابة في database، أو راجع تعليمات نقل القاعدة السابقة في INSTALL.txt.'], JSON_UNESCAPED_UNICODE);
     exit;
 }

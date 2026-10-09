@@ -81,4 +81,6 @@ npm run build
 python3 scripts/package-hosting.py
 ```
 
-`artifacts/forsah-hosting-ready.zip` يحتوي `index.html` و`assets/` وملفات PHP و`.htaccess` في الجذر، مع قاعدة SQLite أولية فارغة في `database/`. عند أول طلب ينشئ قاعدة تشغيل خاصة **خارج** المجلد العام تلقائيًا إذا سمحت صلاحيات الاستضافة؛ لا يُخزّن المستخدمين في قاعدة seed العامة. قاعدة قائمة لا تُستبدل، واكتشاف قاعدة قديمة في مسار مختلف يتطلب تحديد مسارها بدل فقد بياناتها. راجع `INSTALL.txt` داخل ZIP. اختبار الحزمة المستخرجة: `python3 backend/tests/hosting.py`، وworkflow المستقل `hosting.yml`.
+`artifacts/forsah-hosting-ready.zip` يحتوي `index.html` و`assets/` وملفات PHP و`.htaccess` في الجذر. حسب الطلب الأخير، تُنشأ قاعدة التشغيل داخل `forsah/database/forsah.sqlite` من seed فارغة مرفقة، دون استبدال قاعدة موجودة عند التحديث. ملفا `.htaccess` يحظران المجلد والملفات المساعدة؛ يرفض API فتح القاعدة المحلية دون علامة الحماية من خادم الويب. الحزمة تتطلب Apache/LiteSpeed مع التعليمات المرفقة. عند نقل النسخة الخارجية السابقة، اتبع `INSTALL.txt` ولا تنس WAL. تعليمات الحزمة العامة السابقة التي تستخدم قاعدة خارجية لا تنطبق على هذه الحزمة المحلية الجديدة.
+
+الاختبارات: `backend/tests/hosting.py` للقاعدة والتسجيل والحفاظ على البيانات، و`backend/tests/hosting_apache.py` لاختبار HTTP 403 فعليًا باستخدام Apache. workflow المستقل: `hosting.yml`.

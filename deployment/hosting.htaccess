@@ -1,4 +1,6 @@
-# Apache 2.4 / compatible LiteSpeed. Never place live user data in this directory.
+# Apache 2.4 / compatible LiteSpeed. The local database directory is denied below.
+# Marker is required by PHP before opening the local database.
+SetEnv FORSAH_PROTECTED_DATABASE 1
 Options -Indexes -MultiViews
 DirectoryIndex index.html
 AddDefaultCharset UTF-8

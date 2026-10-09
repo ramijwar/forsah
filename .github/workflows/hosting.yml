@@ -31,6 +31,9 @@ jobs:
       - run: php -l deployment/hosting-auto.php && php -l backend/config-loader.php
       - run: python3 scripts/package-hosting.py
       - run: python3 scripts/run-checked.py python3 backend/tests/hosting.py
+      - name: Install Apache for access-control verification
+        run: sudo apt-get update -qq && sudo apt-get install -y apache2
+      - run: python3 scripts/run-checked.py python3 backend/tests/hosting_apache.py
       - uses: actions/upload-artifact@v4
         with:
           name: forsah-hosting-ready

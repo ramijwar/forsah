@@ -39,7 +39,7 @@ function db(): PDO {
     umask(0077);
     $path = getenv('FORSAH_DB_PATH') ?: dirname(__DIR__) . '/var/forsah.sqlite';
     $documentRoot = realpath($_SERVER['DOCUMENT_ROOT'] ?? '') ?: '';
-    if ($documentRoot !== '' && str_starts_with($path, rtrim($documentRoot, '/') . '/')) fail(503, 'Database must be outside the public web root');
+    if ($documentRoot !== '' && str_starts_with($path, rtrim($documentRoot, '/') . '/') && !protectedHostingDatabase($path)) fail(503, 'Local database requires active hosting access protection');
     $dir = dirname($path);
     $newDir = !is_dir($dir);
     if ($newDir && !mkdir($dir, 0700, true) && !is_dir($dir)) fail(500, 'تعذر إنشاء مجلد قاعدة البيانات.');
