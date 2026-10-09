@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/config-loader.php';
 
 /* فرصة API: tokens opaque, random, stored only as SHA-256 hashes. */
 header('Content-Type: application/json; charset=utf-8');
@@ -23,6 +24,7 @@ function respond(int $status, array $payload): never {
 function ok(mixed $data, int $status = 200): never { respond($status, ['ok' => true, 'data' => $data]); }
 function fail(int $status, string $message): never { respond($status, ['ok' => false, 'error' => $message]); }
 function jsonBody(): array {
+    if ((int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 65536) fail(413, 'Request too large');
     $raw = file_get_contents('php://input');
     if ($raw === false || trim($raw) === '') return [];
     $body = json_decode($raw, true);
@@ -33,6 +35,7 @@ function db(): PDO {
     static $pdo = null;
     if ($pdo instanceof PDO) return $pdo;
     if (!extension_loaded('pdo_sqlite')) fail(503, 'امتداد PDO SQLite غير مثبت على الخادم.');
+    if (preg_match('/(^|\.)t3lam\.site$/', explode(':', $_SERVER['HTTP_HOST'] ?? '')[0]) && !getenv('FORSAH_DB_PATH')) fail(503, 'Private database path must be configured');
     umask(0077);
     $path = getenv('FORSAH_DB_PATH') ?: dirname(__DIR__) . '/var/forsah.sqlite';
     $dir = dirname($path);
@@ -176,7 +179,7 @@ function positiveId(): int {
 }
 function userPublic(array $user): array {
     unset($user['password_hash']);
-    $user['id'] = (int)$user['id']; $user['is_banned'] = (bool)$user['is_banned'];
+    $user['id'] = (int)$user['id']; $user['is_banned'] = (bool)($user['is_banned'] ?? false);
     return $user;
 }
 function rateLimitLogin(): void {
@@ -198,6 +201,8 @@ try {
     $resource = $_GET['resource'] ?? '';
     $action = $_GET['action'] ?? '';
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+    require_once __DIR__ . '/market.php';
+    marketRoutes($resource, $action, $method, $pdo);
     if ($resource === 'admin' && $action === 'login' && $method === 'POST') {
         rateLimitLogin(); $body = jsonBody();
         $email = strtolower(trim((string)($body['email'] ?? ''))); $password = (string)($body['password'] ?? '');
@@ -230,7 +235,7 @@ try {
     }
     if ($resource === 'reports' && $action === 'create' && $method === 'POST') {
         rateLimitPublic('reports', 12, 15);
-        $body=jsonBody(); $name=trim((string)($body['name']??'')); $email=trim((string)($body['email']??'')); $entityType=(string)($body['entity_type']??''); $entityId=filter_var($body['entity_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]); $reason=trim((string)($body['reason']??'')); $description=trim((string)($body['description']??''));
+        $body=jsonBody(); $reporter=optionalMember(); if($reporter){$body['name']=$reporter['name'];$body['email']=$reporter['email'];} $name=trim((string)($body['name']??'')); $email=trim((string)($body['email']??'')); $entityType=(string)($body['entity_type']??''); $entityId=filter_var($body['entity_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]); $reason=trim((string)($body['reason']??'')); $description=trim((string)($body['description']??''));
         if($name===''||mb_strlen($name)>100||!filter_var($email,FILTER_VALIDATE_EMAIL)||mb_strlen($email)>190||!in_array($entityType,['ad','user'],true)||$entityId===false||$reason===''||mb_strlen($reason)>160||mb_strlen($description)>2000) fail(422,'بيانات البلاغ غير مكتملة أو غير صالحة.');
         if($entityType==='ad'){$check=$pdo->prepare('SELECT id FROM ads WHERE id=?');$check->execute([$entityId]);}else{$check=$pdo->prepare("SELECT id FROM users WHERE id=? AND role='user'");$check->execute([$entityId]);}
         if(!$check->fetch())fail(404,'العنصر المطلوب الإبلاغ عنه غير موجود.');

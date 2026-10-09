@@ -4,6 +4,11 @@ const base = process.env.VITE_API_BASE_URL || 'https://t3lam.site/forsah/api.php
 const url = new URL(base);
 if (url.protocol !== 'https:') throw new Error('Production API must use HTTPS');
 url.searchParams.set('resource', 'services');
+const healthUrl = new URL(base); healthUrl.searchParams.set('resource', 'health');
+const healthResponse = await fetch(healthUrl, { signal: AbortSignal.timeout(20000), redirect: 'error' });
+if (!healthResponse.ok) throw new Error(`Server v2 is not deployed (health HTTP ${healthResponse.status})`);
+const health = await healthResponse.json();
+if (health.ok !== true || health.data?.version !== 2 || health.data?.images_supported !== true) throw new Error('Deploy server v2 with GD support before using this APK');
 const origin = 'https://localhost'; // Capacitor Android WebView origin, not a backend URL.
 const response = await fetch(url, { headers: { Origin: origin }, signal: AbortSignal.timeout(20000), redirect: 'error' });
 if (!response.ok) throw new Error(`Services HTTP ${response.status}`);

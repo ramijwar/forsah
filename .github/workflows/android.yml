@@ -23,14 +23,21 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: pdo_sqlite, mbstring
+          extensions: pdo_sqlite, mbstring, gd
           coverage: none
       - run: npm ci
       - run: npm test
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run build
-      - run: php -l backend/api.php && php -l backend/bootstrap-admin.php
-      - run: python3 backend/tests/smoke.py
+      - run: php -l backend/api.php && php -l backend/market.php && php -l backend/config-loader.php && php -l backend/bootstrap-admin.php
+      - run: python3 scripts/run-checked.py python3 backend/tests/smoke.py
+      - run: python3 scripts/run-checked.py python3 backend/tests/market.py
+      - run: python3 scripts/package-server.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forsah-server-v2
+          path: artifacts/forsah-server-v2.zip
+          if-no-files-found: error
   live-server:
     runs-on: ubuntu-24.04
     timeout-minutes: 5

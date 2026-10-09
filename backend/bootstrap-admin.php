@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/config-loader.php';
 
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit("Not found\n"); }
 if (!extension_loaded('pdo_sqlite')) { fwrite(STDERR, "خطأ: ثبّت امتداد pdo_sqlite في PHP أولًا.\n"); exit(1); }
