@@ -21,7 +21,11 @@ function hostingDatabaseProtectionIssue(string $path): ?string {
     foreach ($_SERVER as $key => $value) {
         if (preg_match('/^(REDIRECT_)*FORSAH_PROTECTED_DATABASE$/', $key) && $value === '1') return null;
     }
-    if (getenv('FORSAH_PROTECTED_DATABASE') === '1') return null;
+    $environmentKey = 'FORSAH_PROTECTED_DATABASE';
+    for ($redirects = 0; $redirects <= 8; $redirects++) {
+        if (getenv($environmentKey) === '1') return null;
+        $environmentKey = 'REDIRECT_' . $environmentKey;
+    }
     return 'DB_GUARD_SIGNAL_MISSING';
 }
 function protectedHostingDatabase(string $path): bool {
