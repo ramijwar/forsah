@@ -66,12 +66,12 @@ export default function App() {
   const [register, setRegister] = useState(false); const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [password, setPassword] = useState('');
   const [phone, setPhone] = useState(''); const [currentPassword, setCurrentPassword] = useState('');
   const [biometric, setBiometric] = useState(false); const [savedBiometric, setSavedBiometric] = useState(false);
-  const operation = useRef(false); const sessionGeneration = useRef(0);
+  const operation = useRef(false);
   const status = (s: string) => ({ pending: t('قيد المراجعة','Pending review'), active: t('منشور','Published'), rejected: t('مرفوض','Rejected'), blocked: t('محظور','Blocked'), open: t('مفتوحة','Open'), in_progress: t('قيد المتابعة','In progress'), resolved: t('مغلقة','Resolved') }[s] || s);
   const api = useCallback(<T,>(resource: string, action = '', options: RequestInit = {}, params: Record<string,string> = {}) => apiRequest<T>(resource, {
     ...options, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(options.body && !(options.body instanceof FormData) ? { 'Content-Type':'application/json' } : {}), ...options.headers },
   }, { ...params, ...(action ? { action } : {}) }), [token]);
-  const saveToken = useCallback((value: string) => { sessionGeneration.current++; setToken(value); try { if (value) sessionStorage.setItem('forsah-member-token',value); else sessionStorage.removeItem('forsah-member-token'); } catch { /* memory-only session */ } }, []);
+  const saveToken = useCallback((value: string) => { setToken(value); try { if (value) sessionStorage.setItem('forsah-member-token',value); else sessionStorage.removeItem('forsah-member-token'); } catch { /* memory-only session */ } }, []);
   const run = async (work: () => Promise<void>) => {
     if(operation.current) return; operation.current=true;setBusy(true);setError('');setNotice('');
     try { await work(); } catch(e) { setError(e instanceof Error ? e.message : t('تعذر الاتصال بالخادم','Server connection failed')); }
@@ -86,7 +86,7 @@ export default function App() {
   },[]);
   useEffect(() => {
     if(!native)return;
-    SessionVault.available().then(s=>{setBiometric(s.available);setSavedBiometric(s.saved);}).catch(()=>undefined);
+    SessionVault.available().then(s=>{setBiometric(s.available);setSavedBiometric(s.saved);if(s.saved){saveToken('');setUser(null);navigate('/account');}}).catch(()=>undefined);
   },[]);
   useEffect(() => {
     if(!native)return;

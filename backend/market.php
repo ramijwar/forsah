@@ -81,7 +81,7 @@ function marketRoutes(string $resource,string $action,string $method,PDO $pdo): 
             if(!filter_var($email,FILTER_VALIDATE_EMAIL))fail(422,'Invalid email');
             if($action==='register') {
                 rateLimitPublic('register',5,60); $name=textField($b,'name',100);
-                if(strlen($password)<12)fail(422,'كلمة المرور 12 حرفًا على الأقل / Minimum 12 characters');
+                if(strlen($password)<12 || strlen($password)>72)fail(422,'كلمة المرور بين 12 و72 بايت / Password must be 12–72 bytes');
                 // Only register new identities. Never claim a guest/support/admin record by email.
                 $pdo->prepare("INSERT INTO users(name,email,password_hash,role) VALUES(?,?,?,'user')")->execute([$name,$email,password_hash($password,PASSWORD_DEFAULT)]);
             }
@@ -102,7 +102,7 @@ function marketRoutes(string $resource,string $action,string $method,PDO $pdo): 
         if ($method==='POST' && $action==='password') {
             rateLimitPublic('password',5,15); $b=jsonBody(); $old=textField($b,'current_password',200); $new=textField($b,'password',200);
             $q=$pdo->prepare('SELECT password_hash FROM users WHERE id=?');$q->execute([$u['id']]);
-            if(!password_verify($old,$q->fetchColumn() ?: '') || strlen($new)<12)fail(422,'تحقق من كلمة المرور / Check password');
+            if(!password_verify($old,$q->fetchColumn() ?: '') || strlen($new)<12 || strlen($new)>72)fail(422,'تحقق من كلمة المرور / Check password');
             $pdo->beginTransaction();
             $pdo->prepare('UPDATE users SET password_hash=? WHERE id=?')->execute([password_hash($new,PASSWORD_DEFAULT),$u['id']]);
             $pdo->prepare('DELETE FROM sessions WHERE user_id=?')->execute([$u['id']]);$pdo->commit();ok(['login_required'=>true]);

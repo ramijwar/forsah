@@ -38,6 +38,8 @@ function db(): PDO {
     if (preg_match('/(^|\.)t3lam\.site$/', explode(':', $_SERVER['HTTP_HOST'] ?? '')[0]) && !getenv('FORSAH_DB_PATH')) fail(503, 'Private database path must be configured');
     umask(0077);
     $path = getenv('FORSAH_DB_PATH') ?: dirname(__DIR__) . '/var/forsah.sqlite';
+    $documentRoot = realpath($_SERVER['DOCUMENT_ROOT'] ?? '') ?: '';
+    if ($documentRoot !== '' && str_starts_with($path, rtrim($documentRoot, '/') . '/')) fail(503, 'Database must be outside the public web root');
     $dir = dirname($path);
     $newDir = !is_dir($dir);
     if ($newDir && !mkdir($dir, 0700, true) && !is_dir($dir)) fail(500, 'تعذر إنشاء مجلد قاعدة البيانات.');
@@ -239,7 +241,7 @@ try {
         if($name===''||mb_strlen($name)>100||!filter_var($email,FILTER_VALIDATE_EMAIL)||mb_strlen($email)>190||!in_array($entityType,['ad','user'],true)||$entityId===false||$reason===''||mb_strlen($reason)>160||mb_strlen($description)>2000) fail(422,'بيانات البلاغ غير مكتملة أو غير صالحة.');
         if($entityType==='ad'){$check=$pdo->prepare('SELECT id FROM ads WHERE id=?');$check->execute([$entityId]);}else{$check=$pdo->prepare("SELECT id FROM users WHERE id=? AND role='user'");$check->execute([$entityId]);}
         if(!$check->fetch())fail(404,'العنصر المطلوب الإبلاغ عنه غير موجود.');
-        $pdo->prepare('INSERT INTO reports(reporter_name,reporter_email,entity_type,entity_id,reason,description) VALUES(?,?,?,?,?,?)')->execute([$name,$email,$entityType,$entityId,$reason,$description]);ok(['id'=>(int)$pdo->lastInsertId(),'status'=>'pending'],201);
+        $pdo->prepare('INSERT INTO reports(reporter_user_id,reporter_name,reporter_email,entity_type,entity_id,reason,description) VALUES(?,?,?,?,?,?,?)')->execute([$reporter['id']??null,$name,$email,$entityType,$entityId,$reason,$description]);ok(['id'=>(int)$pdo->lastInsertId(),'status'=>'pending'],201);
     }
     if ($resource !== 'admin') fail(404, 'المسار غير موجود.');
     if ($action === 'logout' && $method === 'POST') {
