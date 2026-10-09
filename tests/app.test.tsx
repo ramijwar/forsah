@@ -11,6 +11,7 @@ const user = { id: 1, name: 'Test User', email: 'test@example.test', phone: null
 const ad = { id: 10, user_id: 1, title: 'My real listing', description: 'Details', category: 'الحراج الشعبي', status: 'pending', images: [] };
 beforeEach(()=>{
   localStorage.clear();sessionStorage.clear();vi.clearAllMocks();
+  vi.stubGlobal('scrollTo',vi.fn());
   vi.stubGlobal('matchMedia',()=>({matches:false,addEventListener:vi.fn(),removeEventListener:vi.fn()}));
   api.mockImplementation(async(resource,_options,params)=>{
     if(resource==='auth'&&params?.action==='me')return user;
@@ -23,11 +24,11 @@ beforeEach(()=>{
 afterEach(()=>{cleanup();vi.unstubAllGlobals();});
 const mount=(path='/')=>render(<MemoryRouter initialEntries={[path]}><App/></MemoryRouter>);
 it('shows empty real marketplace rather than sample listings',async()=>{
-  mount();expect(await screen.findByText('لا توجد إعلانات مطابقة. لن نعرض بيانات وهمية.')).toBeTruthy();
+  mount('/search');expect(await screen.findByText('ما لقينا نتائج مطابقة')).toBeTruthy();
   expect(api).toHaveBeenCalledWith('market',expect.anything(),expect.objectContaining({action:'list'}));
 });
 it('guards member-only screens without fake data',async()=>{
-  mount('/messages');expect(await screen.findByText('سجّل دخولك أولًا')).toBeTruthy();
+  mount('/messages');expect(await screen.findByText('سجّل دخولك لعرض رسائلك')).toBeTruthy();
   expect(api.mock.calls.some(([r])=>r==='chat')).toBe(false);
 });
 it('submits actual registration and stores only the returned session',async()=>{
@@ -38,6 +39,7 @@ it('submits actual registration and stores only the returned session',async()=>{
     return {items:[],has_more:false};
   });
   mount('/account');const actions=userEvent.setup();
+  await actions.click(screen.getByRole('button',{name:'تسجيل الدخول',exact:true}));
   await actions.click(screen.getByRole('button',{name:'إنشاء حساب',exact:true}));
   await actions.type(screen.getByLabelText('الاسم'),'Test User');await actions.type(screen.getByLabelText('البريد الإلكتروني'),'test@example.test');
   await actions.type(screen.getByLabelText(/كلمة المرور/),'Secure-test-password');
@@ -75,6 +77,42 @@ it('renders real support replies for the signed-in account',async()=>{
 });
 it('restored service cards filter real marketplace listings',async()=>{
   mount();await screen.findByRole('heading',{name:'تصفّح الخدمات'});
-  await userEvent.setup().click(screen.getByRole('button',{name:/الحراج الشعبي.*تصفح الإعلانات/}));
+  await userEvent.setup().click(screen.getByRole('button',{name:/الحراج الشعبي.*بيع وشراء/}));
   await waitFor(()=>expect(api).toHaveBeenCalledWith('market',expect.anything(),expect.objectContaining({action:'list',category:'الحراج الشعبي'})));
+});
+
+it('bell opens an in-page popover, toggles closed, and Escape restores focus',async()=>{
+  const actions=userEvent.setup();mount();const bell=screen.getByRole('button',{name:'الإشعارات',exact:true});
+  await actions.click(bell);expect(await screen.findByRole('dialog',{name:'الإشعارات'})).toBeTruthy();
+  expect(screen.getByRole('heading',{name:'تصفّح الخدمات'})).toBeTruthy();
+  await actions.keyboard('{Escape}');expect(screen.queryByRole('dialog')).toBeNull();expect(document.activeElement).toBe(bell);
+  await actions.click(bell);await actions.click(bell);expect(screen.queryByRole('dialog')).toBeNull();
+});
+it('message icon switches popovers without navigating and outside click closes them',async()=>{
+  const actions=userEvent.setup();mount();await actions.click(screen.getByRole('button',{name:'الإشعارات',exact:true}));
+  await actions.click(screen.getByRole('button',{name:'الرسائل',exact:true}));
+  expect(screen.queryByRole('dialog',{name:'الإشعارات'})).toBeNull();expect(screen.getByRole('dialog',{name:'رسائلك'})).toBeTruthy();
+  await actions.click(screen.getByRole('heading',{name:'تصفّح الخدمات'}));expect(screen.queryByRole('dialog')).toBeNull();
+});
+it('create action opens the original-style modal on the home page',async()=>{
+  sessionStorage.setItem('forsah-member-token','session');const actions=userEvent.setup();mount();
+  await waitFor(()=>expect(api).toHaveBeenCalledWith('auth',expect.anything(),expect.objectContaining({action:'me'})));
+  await actions.click(screen.getByRole('button',{name:'أضف إعلانك',exact:true}));
+  expect(screen.getByRole('dialog',{name:'أضف إعلانك'})).toBeTruthy();expect(screen.getByRole('heading',{name:'تصفّح الخدمات'})).toBeTruthy();
+  const input=await screen.findByLabelText('العنوان');await actions.type(input,'Typing stays focused');expect(document.activeElement).toBe(input);
+  await actions.keyboard('{Escape}');expect(screen.queryByRole('dialog')).toBeNull();expect(document.body.style.overflow).toBe('');
+});
+it('member bell contents are built from actual account endpoints, not invented messages',async()=>{
+  sessionStorage.setItem('forsah-member-token','session');
+  api.mockImplementation(async(resource,_options,params)=>{
+    if(resource==='auth')return user;if(resource==='favorites')return [];
+    if(resource==='chat')return [{id:3,partner:'Real seller',last_message:'Actual message',title:'Actual ad'}];
+    if(resource==='member-support')return [{id:5,subject:'Real ticket',status:'in_progress',updated_at:'2026-10-09'}];
+    if(resource==='market'&&params?.action==='mine')return {items:[ad]};
+    return {items:[],has_more:false};
+  });
+  mount();await waitFor(()=>expect(api).toHaveBeenCalledWith('favorites',expect.anything(),expect.anything()));
+  await userEvent.setup().click(screen.getByRole('button',{name:'الإشعارات',exact:true}));
+  expect(await screen.findByText('Actual message')).toBeTruthy();expect(await screen.findByText('Real ticket')).toBeTruthy();
+  expect(screen.getByText('My real listing')).toBeTruthy();
 });

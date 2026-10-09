@@ -1,44 +1,92 @@
-// Real Chromium smoke test. API is mocked: this verifies UI/assets, not production data.
+// Real Chromium checks against the original ZIP; backend responses are mocked.
 import { chromium } from 'playwright-core';
 import { createServer } from 'node:http';
-import { readFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
-const root=resolve('dist');
+const root=resolve('dist'),reference=resolve('artifacts/reference-dist');
 const server=createServer((req,res)=>{
-  let path=new URL(req.url,'http://localhost').pathname;
-  for(const prefix of ['/nested/demo/','/forsah/']) if(path.startsWith(prefix)){path=path.slice(prefix.length);break;}
-  const file=resolve(root,path.replace(/^\//,'')||'index.html');
-  if(!file.startsWith(root+'/')||!existsSync(file)){res.writeHead(404);res.end();return;}
+  let path=new URL(req.url,'http://localhost').pathname;let base=root;
+  if(path.startsWith('/__original/')){base=reference;path=path.slice('/__original/'.length);}
+  else for(const prefix of ['/nested/demo/','/forsah/'])if(path.startsWith(prefix)){path=path.slice(prefix.length);break;}
+  const file=resolve(base,path.replace(/^\//,'')||'index.html');
+  if(!file.startsWith(base+'/')||!existsSync(file)){res.writeHead(404);res.end();return;}
   res.setHeader('Content-Type',({'.html':'text/html','.js':'application/javascript','.css':'text/css','.woff2':'font/woff2','.woff':'font/woff'})[extname(file)]||'text/plain');res.end(readFileSync(file));
 });
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
-let browser;
-try{
+const origin=`http://127.0.0.1:${server.address().port}`;let browser;
+const assert=(condition,message)=>{if(!condition)throw new Error(message);};
+const settle=async page=>{await page.evaluate(()=>document.fonts.ready);await page.waitForTimeout(750);};
+const geometry=async page=>page.evaluate(()=>{
+ const selectors=['header','.hero-panel','.category-grid','.category-card','.quick-card','.bottom-nav'];
+ return Object.fromEntries(selectors.map(selector=>{const e=document.querySelector(selector),r=e.getBoundingClientRect(),style=getComputedStyle(e);return [selector,{x:r.x,y:r.y,width:r.width,height:r.height,radius:style.borderRadius,font:style.fontFamily}];}));
+});
+try {
  browser=await chromium.launch({executablePath:process.env.CHROME_BIN||'/usr/bin/google-chrome',args:['--no-sandbox'],headless:true});
- const page=await browser.newPage({viewport:{width:390,height:844}});
- const errors=[];page.on('pageerror',e=>errors.push(e.message));
- const missing=[];page.on('response',r=>{if(r.status()>=400)missing.push(r.url());});
- await page.route('https://t3lam.site/**',route=>route.fulfill({headers:{'Access-Control-Allow-Origin':'*'},json:{ok:true,data:{items:[],has_more:false}}}));
  mkdirSync('artifacts/visual',{recursive:true});
- for(const folder of ['/','/forsah/','/nested/demo/']){
-   await page.goto(`http://127.0.0.1:${server.address().port}${folder}`,{waitUntil:'networkidle'});
-   await page.getByRole('heading',{name:'تصفّح الخدمات'}).waitFor();
-   await page.evaluate(()=>document.fonts.ready);
-   if(await page.getByRole('alert').count())throw new Error(await page.getByRole('alert').innerText());
-   if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw new Error(`Horizontal overflow at ${folder}`);
-   console.log('PASS Chromium mobile layout, JS/CSS/font loading:',folder);
+ const comparisons=[];
+ for(const width of [360,390,768,1280]){
+   const context=await browser.newContext({viewport:{width,height:900}});
+   const original=await context.newPage();const current=await context.newPage();
+   await original.goto(origin+'/__original/',{waitUntil:'networkidle'});
+   await current.goto(origin+'/',{waitUntil:'networkidle'});
+   await settle(original);await settle(current);
+   const before=await geometry(original),after=await geometry(current);
+   for(const selector of Object.keys(before)){
+     for(const value of ['x','y','width','height'])assert(Math.abs(before[selector][value]-after[selector][value])<=2,`Original layout mismatch at ${width}px ${selector}.${value}: ${before[selector][value]} vs ${after[selector][value]}`);
+     assert(before[selector].radius===after[selector].radius,`Radius mismatch: ${width} ${selector}`);
+     assert(before[selector].font===after[selector].font,`Font mismatch: ${width} ${selector}`);
+   }
+   if(width===390||width===1280){await original.screenshot({path:`artifacts/visual/original-${width}.png`,fullPage:true});await current.screenshot({path:`artifacts/visual/restored-${width}.png`,fullPage:true});}
+   comparisons.push({width,before,after});await context.close();
+   console.log(`PASS original ZIP layout comparison: ${width}px (header, hero, category grid/cards, shortcuts, bottom nav).`);
  }
- await page.screenshot({path:'artifacts/visual/home-mobile.png',fullPage:true});
- await page.getByRole('button',{name:'الإعدادات',exact:true}).click();
- await page.getByRole('heading',{name:'الإعدادات',exact:true}).waitFor();
- await page.getByLabel('اللغة',{exact:true}).selectOption('en');
- await page.getByLabel('Theme',{exact:true}).selectOption('dark');
- await page.getByRole('button',{name:'Go home',exact:true}).click();
+ writeFileSync('artifacts/visual/layout-comparison.json',JSON.stringify(comparisons,null,2));
+ const page=await browser.newPage({viewport:{width:390,height:844}});const errors=[],missing=[];
+ page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>{if(r.status()>=400)missing.push(r.url());});
+ const account={id:1,name:'Test Member',email:'member@example.test',role:'user',phone:''};
+ await page.route('https://t3lam.site/**',route=>{
+   const url=new URL(route.request().url()),resource=url.searchParams.get('resource'),action=url.searchParams.get('action');let data;
+   if(resource==='auth')data=account;
+   else if(resource==='chat')data=[{id:4,partner:'Real conversation',title:'Listing',last_message:'Server message'}];
+   else if(resource==='member-support')data=[{id:9,subject:'Server support ticket',status:'in_progress',updated_at:'2026-10-09'}];
+   else if(resource==='favorites')data=[];
+   else if(resource==='market'&&action==='mine')data={items:[{id:3,title:'Server listing',status:'active',images:[],user_id:1}],has_more:false};
+   else data={items:[],has_more:false};
+   return route.fulfill({headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,content-type','Access-Control-Allow-Methods':'GET,POST,PATCH,DELETE,OPTIONS'},json:{ok:true,data}});
+ });
+ for(const folder of ['/','/forsah/','/nested/demo/']){
+   await page.goto(origin+folder,{waitUntil:'networkidle'});await settle(page);
+   await page.getByRole('heading',{name:'تصفّح الخدمات'}).waitFor();
+   assert(!(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)),`Horizontal overflow: ${folder}`);
+ }
+ const initialUrl=page.url(),beforeHero=await page.locator('.hero-panel').boundingBox();
+ const bell=page.getByRole('button',{name:'الإشعارات',exact:true});
+ await bell.click();await page.getByRole('dialog',{name:'الإشعارات',exact:true}).waitFor();
+ assert(page.url()===initialUrl,'Bell navigated away from the page');
+ const afterHero=await page.locator('.hero-panel').boundingBox();assert(Math.abs(beforeHero.y-afterHero.y)<1,'Popover shifted page layout');
+ await page.screenshot({path:'artifacts/visual/notification-popover.png',fullPage:true});
+ await page.keyboard.press('Escape');assert(await bell.evaluate(e=>document.activeElement===e),'Escape did not restore bell focus');
+ await bell.click();await bell.click();assert(await page.getByRole('dialog').count()===0,'Bell toggle failed');
+ await bell.click();await page.getByRole('button',{name:'الرسائل',exact:true}).click();await page.getByRole('dialog',{name:'رسائلك'}).waitFor();
+ await page.getByRole('heading',{name:'تصفّح الخدمات'}).click();assert(await page.getByRole('dialog').count()===0,'Outside click did not close popover');
+ await page.getByRole('button',{name:'أضف إعلانك',exact:true}).click();await page.getByRole('dialog',{name:'أضف إعلانك'}).waitFor();
+ assert(page.url()===initialUrl,'Create button navigated instead of opening modal');
+ await page.keyboard.press('Escape');assert(await page.evaluate(()=>document.body.style.overflow)==='','Modal did not restore scroll');
+ await page.getByRole('button',{name:'الإعدادات',exact:true}).click();await page.getByRole('heading',{name:'الإعدادات',exact:true}).waitFor();
+ assert(await page.locator('.settings-card').count()===3,'Original settings card stack missing');
+ await page.getByLabel('اللغة',{exact:true}).selectOption('en');await page.getByRole('button',{name:'Dark',exact:true}).click();
+ await page.getByRole('button',{name:'Go home',exact:true}).click();await settle(page);
+ assert(await page.locator('.app-shell.dark-theme').count()===1,'Dark mode failed');
+ assert(!(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)),'LTR overflow');
  await page.screenshot({path:'artifacts/visual/home-english-dark.png',fullPage:true});
- if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw new Error('LTR horizontal overflow');
- await page.setViewportSize({width:1440,height:1000});
- await page.screenshot({path:'artifacts/visual/home-desktop.png',fullPage:true});
- if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw new Error('Desktop horizontal overflow');
- if(errors.length||missing.length)throw new Error(JSON.stringify({errors,missing}));
- console.log('PASS English/dark mode and desktop; no runtime errors or missing assets.');
+ // Signed-in member: real endpoint adapters, not static demo messages.
+ await page.evaluate(()=>{localStorage.setItem('forsah-language','"ar"');sessionStorage.setItem('forsah-member-token','test-token');});
+ await page.reload({waitUntil:'networkidle'});await settle(page);
+ await page.getByRole('button',{name:'الإشعارات',exact:true}).click();await page.getByText('Server support ticket',{exact:true}).waitFor();
+ await page.getByText('Server message',{exact:true}).waitFor();await page.getByText('Server listing',{exact:true}).waitFor();
+ await page.keyboard.press('Escape');
+ await page.getByRole('button',{name:'أضف إعلانك',exact:true}).click();const title=page.getByLabel('العنوان',{exact:true});await title.fill('Input keeps focus');
+ assert(await title.evaluate(e=>document.activeElement===e),'Form input lost focus');await page.keyboard.press('Escape');
+ assert(!errors.length&&!missing.length,JSON.stringify({errors,missing}));
+ console.log('PASS popover toggle/Escape/outside dismissal, no navigation/layout jump, create modal, real account adapters, input focus, original settings, RTL/LTR, dark mode and nested assets.');
 } finally {if(browser)await browser.close();server.close();}

@@ -10,6 +10,7 @@ on:
       - 'src/**'
       - 'scripts/check-assets.mjs'
       - 'scripts/browser-smoke.mjs'
+      - 'scripts/build-original-reference.mjs'
       - 'public/**'
       - 'package*.json'
       - 'vite.config.ts'
@@ -35,6 +36,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - run: node scripts/build-original-reference.mjs
       - run: python3 scripts/run-checked.py node scripts/browser-smoke.mjs
       - uses: actions/upload-artifact@v4
         if: always()
