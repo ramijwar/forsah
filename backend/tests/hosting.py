@@ -15,16 +15,20 @@ from zipfile import ZipFile
 ROOT = Path(__file__).resolve().parents[2]
 ZIP = ROOT/'artifacts/forsah-hosting-ready.zip'
 
-def scenario(legacy=False, protected=True):
+def scenario(legacy=False, protected=True, fault=None, marker_prefix="", comments=False):
     with tempfile.TemporaryDirectory(prefix='forsah-hosting-') as temp:
         home=Path(temp); web=home/'public_html'; app=web/'forsah'; app.mkdir(parents=True)
         with ZipFile(ZIP) as archive: archive.extractall(app)
+        if comments: (app/'database/.htaccess').write_text('\ufeff# Protected database\r\nRequire   all denied\r\n')
+        if fault=='DB_GUARD_FILE_MISSING': (app/'database/.htaccess').unlink()
+        if fault=='DB_GUARD_RULE_INVALID': (app/'database/.htaccess').write_text('Require all granted\n')
+        if fault=='DB_SEED_MISSING': (app/'database/forsah.seed.sqlite').unlink()
         if legacy:
             old=web/'var';old.mkdir();sqlite3.connect(old/'forsah.sqlite').close()
         env={k:v for k,v in os.environ.items() if not k.startswith('FORSAH_')}
         # Built-in PHP does not process .htaccess. Simulate the Apache marker
         # for functional tests; also test fail-closed without it.
-        if protected: env['FORSAH_PROTECTED_DATABASE']='1'
+        if protected: env[marker_prefix+'FORSAH_PROTECTED_DATABASE']='1'
         with socket.socket() as sock:
             sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
         log=open(home/'php.log','w')
@@ -32,7 +36,7 @@ def scenario(legacy=False, protected=True):
         def request(path, body=None):
             req=urllib.request.Request(f'http://127.0.0.1:{port}/forsah/'+path,
                 data=None if body is None else json.dumps(body).encode(),
-                headers={'Host':'t3lam.site','Content-Type':'application/json','Origin':'https://localhost'})
+                headers={'Host':'t3lam.site','Content-Type':'application/json','Origin':'https://localhost','FORSAH_PROTECTED_DATABASE':'1'})
             try:r=urllib.request.urlopen(req,timeout=10)
             except urllib.error.HTTPError as error:r=error
             return r.status,r.read()
@@ -44,8 +48,12 @@ def scenario(legacy=False, protected=True):
             assert request('index.html')[0]==200
             status,raw=request('api.php?resource=health')
             private=app/'database/forsah.sqlite'
-            if legacy or not protected:
+            expected_error = fault or ('DB_LEGACY_FOUND' if legacy else 'DB_GUARD_SIGNAL_MISSING' if not protected else None)
+            if expected_error:
                 assert status==503,(status,raw)
+                payload=json.loads(raw)
+                assert payload['code']==expected_error,payload
+                assert str(home) not in raw.decode(), 'Must not expose absolute host paths'
                 assert not private.exists(), 'Must not silently replace legacy data with a new DB'
                 if legacy: assert (web/'var/forsah.sqlite').exists()
                 return
@@ -83,4 +91,7 @@ if __name__=='__main__':
     scenario()
     scenario(legacy=True)
     scenario(protected=False)
+    scenario(marker_prefix='REDIRECT_REDIRECT_',comments=True)
+    for fault in ['DB_GUARD_FILE_MISSING','DB_GUARD_RULE_INVALID','DB_SEED_MISSING']:
+        scenario(fault=fault)
     print('PASS: flat ZIP extraction, HTTP v2 API, protected in-folder DB auto-install, empty public seed, member registration, non-destructive re-extraction, private salt, CLI admin bootstrap, legacy DB safety, fail-closed without protection marker. Apache directives require Apache hosting; this test uses the PHP server.')

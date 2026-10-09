@@ -14,6 +14,8 @@ SetEnvIfNoCase Authorization "(.+)" HTTP_AUTHORIZATION=$1
 </FilesMatch>
 
 RewriteEngine On
+# Also set the server-side marker during rewriting for CGI/FastCGI hosting.
+RewriteRule ^ - [E=FORSAH_PROTECTED_DATABASE:1]
 # Deny internal directories before SPA routing.
 RewriteRule ^(?:database|private|tools|var|backend|\.git)(?:/|$) - [F,L,NC]
 # Preserve bearer authentication through Apache/PHP-FPM configurations.

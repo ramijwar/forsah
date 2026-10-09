@@ -43,6 +43,15 @@ def main():
         with ZipFile(OUT) as archive:
             assert archive.testzip() is None
             assert {'index.html','api.php','.htaccess','database/forsah.seed.sqlite'} <= set(archive.namelist())
+        # Safe upgrade patch: never includes a live DB, seed, user data or salt.
+        patch = OUT.parent / 'forsah-hosting-fix.zip'
+        with ZipFile(patch, 'w', ZIP_DEFLATED) as archive:
+            archive.write(ROOT / 'backend/config-loader.php', 'config-loader.php')
+            archive.write(ROOT / 'deployment/hosting-auto.php', 'hosting-auto.php')
+            archive.write(ROOT / 'deployment/hosting.htaccess', '.htaccess')
+            archive.write(ROOT / 'deployment/INSTALL.txt', 'INSTALL.txt')
+            archive.writestr('database/.htaccess', 'Require all denied\n')
+        print(f'Created {patch}: configuration/diagnostics only; no database files.')
         print(f'Created {OUT}: {len(tables)} empty SQLite tables, no user data or credentials.')
 
 if __name__ == '__main__': main()
