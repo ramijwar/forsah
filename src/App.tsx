@@ -227,7 +227,7 @@ function App() {
       </button>
       <div className="flex items-center gap-2">
         <button onClick={() => { setNoticeOpen((open) => !open); setMessageOpen(false); }} className={`icon-button relative ${noticeOpen ? 'icon-button-active' : ''}`} aria-label="الإشعارات">
-          <Bell size={19} /> 
+          <Bell size={19} />
         </button>
         <button onClick={() => { setMessageOpen((open) => !open); setNoticeOpen(false); }} className={`icon-button ${messageOpen ? 'icon-button-active' : ''}`} aria-label="الرسائل"><MessageCircle size={19} /></button>
         <button onClick={goSettings} className="icon-button" aria-label="الإعدادات"><SettingsIcon size={19} /></button>
@@ -244,7 +244,7 @@ function App() {
           <button className="text-xs font-semibold text-[#59806a]" onClick={() => { setNoticeOpen(false); setMessageOpen(false); }}>إغلاق</button>
         </div>
         {noticeOpen ? (
-          <div className="mt-4 flex gap-3"><span className="mini-icon bg-[#eef5e7] text-[#5d8050]"><Sparkles size={16} /></span><div><p className="text-sm font-semibold">أهلاً بك في فرصة!</p><p className="mt-1 text-xs text-[#89928d]">فعّل إشعاراتك لتصلك أحدث الفرص.</p></div></div>
+          <div className="mt-4 flex gap-3"><span className="mini-icon bg-[#eef5e7] text-[#5d8050]"><Sparkles size={16} /></span><div><p className="text-sm font-semibold">أهلاً بك في فرصة!</p><p className="mt-1 text-xs text-[#89928d]">إشعارات الدفع غير متاحة في هذا الإصدار.</p></div></div>
         ) : (
           <button onClick={() => { setMessageOpen(false); changeTab('messages'); }} className="mt-4 flex w-full gap-3 text-right"><span className="avatar avatar-small">م</span><div className="flex-1"><p className="text-sm font-semibold">فريق فرصة</p><p className="mt-1 text-xs text-[#89928d]">مرحباً بك! كيف نقدر نخدمك؟</p></div><span className="text-[10px] text-[#a0a8a2]">الآن</span></button>
         )}
@@ -337,10 +337,10 @@ function App() {
   const SearchPage = () => (
     <>
       <div className="mb-5 mt-5"><p className="eyebrow">اكتشف القريب منك</p><h1 className="mt-1 text-[26px] font-bold">البحث</h1></div>
-      <label className="search-field"><Search size={19} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="وش تدور عليه؟" /><button type="button" onClick={() => setToast('خيارات تصفية البحث قريباً')} aria-label="تصفية البحث"><SlidersHorizontal size={18} /></button></label>
+      <label className="search-field"><Search size={19} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="وش تدور عليه؟" /><button type="button" disabled aria-label="تصفية البحث"><SlidersHorizontal size={18} /></button></label>
       <div className="mt-5 flex gap-2 overflow-x-auto pb-2 no-scrollbar">{['الكل', ...categories.map((item) => item.title)].map((label) => <button key={label} onClick={() => setQuery(label === 'الكل' ? '' : label)} className={`filter-chip ${query === label || (label === 'الكل' && !query) ? 'filter-chip-active' : ''}`}>{label}</button>)}</div>
       <div className="mt-5 flex items-center justify-between"><h2 className="font-bold">{query ? 'نتائج البحث' : 'خدمات قد تهمك'}</h2><span className="text-xs text-[#8c968e]">{filtered.length} خدمة</span></div>
-      {filtered.length ? <div className="mt-3 grid gap-3 sm:grid-cols-2">{filtered.map((item) => { const Icon = item.icon; return <button className="result-card" key={`${item.category}-${item.name}`} onClick={() => setToast(`تم اختيار «${item.name}»`)}><span className="category-icon" style={{ backgroundColor: item.tint, color: item.color }}><Icon size={20} /></span><span className="flex-1 text-right"><strong className="block text-sm">{item.name}</strong><span className="mt-1 block text-xs text-[#8c968e]">ضمن {item.category}</span></span><ChevronLeft size={16} className="text-[#aab2ac]" /></button>; })}</div> : <div className="empty-state"><Search size={24} /><strong>ما لقينا نتائج مطابقة</strong><span>جرّب كلمات ثانية أو تصفّح كل الخدمات.</span><button onClick={() => setQuery('')} className="text-sm font-bold text-[#47705c]">عرض كل الخدمات</button></div>}
+      {filtered.length ? <div className="mt-3 grid gap-3 sm:grid-cols-2">{filtered.map((item) => { const Icon = item.icon; return <button className="result-card" key={`${item.category}-${item.name}`} onClick={() => { setAdCategory(item.category); setAdOpen(true); }}><span className="category-icon" style={{ backgroundColor: item.tint, color: item.color }}><Icon size={20} /></span><span className="flex-1 text-right"><strong className="block text-sm">{item.name}</strong><span className="mt-1 block text-xs text-[#8c968e]">ضمن {item.category}</span></span><ChevronLeft size={16} className="text-[#aab2ac]" /></button>; })}</div> : <div className="empty-state"><Search size={24} /><strong>ما لقينا نتائج مطابقة</strong><span>جرّب كلمات ثانية أو تصفّح كل الخدمات.</span><button onClick={() => setQuery('')} className="text-sm font-bold text-[#47705c]">عرض كل الخدمات</button></div>}
     </>
   );
 
@@ -366,7 +366,7 @@ function App() {
       <div className="profile-card"><span className="profile-avatar"><UserRound size={27} /></span><div className="flex-1"><h2 className="font-bold">مرحباً بك</h2><p className="mt-1 text-xs text-[#78867d]">يمكنك إرسال إعلان للمراجعة أو رسالة دعم دون حساب</p></div><BadgeCheck className="text-[#a3b29f]" size={20} /></div>
       <button disabled className="primary-button mt-4 w-full">دخول المستخدم غير متاح حاليًا <ArrowLeft size={16} /></button>
       <div className="mt-5 overflow-hidden rounded-2xl border border-[#e9ede7] bg-white">
-        {[{ icon: Heart, label: 'المفضلة' }, { icon: Clock3, label: 'عمليات البحث الأخيرة' }, { icon: LockKeyhole, label: 'الخصوصية والأمان' }, { icon: SettingsIcon, label: 'الإعدادات' }].map(({ icon: Icon, label }, index) => <button key={label} onClick={() => label === 'الإعدادات' || label === 'الخصوصية والأمان' ? changeTab('settings') : setToast(`${label} — لا توجد عناصر بعد`)} className={`account-row ${index === 3 ? 'last-row' : ''}`}><Icon size={18} /><span>{label}</span><ChevronLeft className="mr-auto" size={16} /></button>)}
+        {[{ icon: Heart, label: 'المفضلة' }, { icon: Clock3, label: 'عمليات البحث الأخيرة' }, { icon: LockKeyhole, label: 'الخصوصية والأمان' }, { icon: SettingsIcon, label: 'الإعدادات' }].map(({ icon: Icon, label }, index) => <button key={label} onClick={() => label === 'الإعدادات' || label === 'الخصوصية والأمان' ? changeTab('settings') : setToast(`${label} — غير متاحة في هذا الإصدار`)} className={`account-row ${index === 3 ? 'last-row' : ''}`}><Icon size={18} /><span>{label}</span><ChevronLeft className="mr-auto" size={16} /></button>)}
       </div>
       <p className="copyright">فرصة <span>·</span> تم التطوير بواسطة <strong>Engineer Abdulrazzak Saleh Al-Ja'ili</strong></p>
     </>
