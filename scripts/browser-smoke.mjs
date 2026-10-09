@@ -37,7 +37,13 @@ try {
      assert(before[selector].font===after[selector].font,`Font mismatch: ${width} ${selector}`);
    }
    if(width===390||width===1280){await original.screenshot({path:`artifacts/visual/original-${width}.png`,fullPage:true});await current.screenshot({path:`artifacts/visual/restored-${width}.png`,fullPage:true});}
-   comparisons.push({width,before,after});await context.close();
+   // The menu must line up with the original header, including centered desktop layouts.
+   await original.getByRole('button',{name:'الإشعارات',exact:true}).click();
+   await current.getByRole('button',{name:'الإشعارات',exact:true}).click();
+   const originalMenu=await original.locator('.popover-card').boundingBox();
+   const restoredMenu=await current.locator('.popover-card').boundingBox();
+   for(const key of ['x','y','width'])assert(Math.abs(originalMenu[key]-restoredMenu[key])<=2,`Popover alignment mismatch at ${width}px: ${key}`);
+   comparisons.push({width,before,after,originalMenu,restoredMenu});await context.close();
    console.log(`PASS original ZIP layout comparison: ${width}px (header, hero, category grid/cards, shortcuts, bottom nav).`);
  }
  writeFileSync('artifacts/visual/layout-comparison.json',JSON.stringify(comparisons,null,2));
