@@ -132,7 +132,7 @@ try {
  await page.getByRole('button',{name:'إضافة إعلان',exact:true}).click();
  let dialog=page.getByRole('dialog',{name:'إضافة إعلان',exact:true});
  await dialog.getByLabel('العنوان',{exact:true}).fill('New admin listing');await dialog.getByLabel('التصنيف',{exact:true}).selectOption(defaultCategories[0].name);await dialog.getByLabel('الوصف وتفاصيل الخدمة والسعر',{exact:true}).fill('Shared listing form');
- await dialog.locator('input[type=file]').setInputFiles({name:'test.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j4mQAAAAASUVORK5CYII=','base64')});
+ await dialog.locator('input[type=file]').setInputFiles({name:'test.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGP4z8AARAwQCgAf7gP9i18U1AAAAABJRU5ErkJggg==','base64')});
  await dialog.getByRole('button',{name:'حفظ للمراجعة',exact:true}).click();await dialog.waitFor({state:'hidden'});
  assert(adminWrites.some(w=>w.action==='ad'&&w.body.title==='New admin listing'),'Create ad did not call backend');
  assert(imageUploads===1,'Admin photo did not reach upload endpoint');

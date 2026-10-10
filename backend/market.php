@@ -154,15 +154,17 @@ function marketRoutes(string $resource,string $action,string $method,PDO $pdo): 
         $u=member();$b=$action==='image'?[]:jsonBody();
         if($method==='POST' && $action==='create') {
             rateLimitPublic('member-ads',15,60);$title=textField($b,'title',120);$description=textField($b,'description',3000);$category=textField($b,'category',80);
+            $pdo->beginTransaction();
             validCategory($pdo,$category);
-            $pdo->prepare("INSERT INTO ads(user_id,title,description,category,status) VALUES(?,?,?,?,'pending')")->execute([$u['id'],$title,$description,$category]);ok(adData(ownedAd((int)$pdo->lastInsertId(),$u)),201);
+            $pdo->prepare("INSERT INTO ads(user_id,title,description,category,status) VALUES(?,?,?,?,'pending')")->execute([$u['id'],$title,$description,$category]);$pdo->commit();ok(adData(ownedAd((int)$pdo->lastInsertId(),$u)),201);
         }
         $id=positiveId();$ad=ownedAd($id,$u);
         if($method==='PATCH' && $action==='edit') {
             $title=textField($b,'title',120);$description=textField($b,'description',3000);$category=textField($b,'category',80);
+            $pdo->beginTransaction();$ad=ownedAd($id,$u);
             validCategory($pdo,$category,$ad['category']);
             if($ad['status']==='blocked')fail(403,'الإعلان محظور / Ad blocked');
-            $pdo->prepare("UPDATE ads SET title=?,description=?,category=?,status='pending',updated_at=datetime('now') WHERE id=? AND user_id=?")->execute([$title,$description,$category,$id,$u['id']]);ok(adData(ownedAd($id,$u)));
+            $pdo->prepare("UPDATE ads SET title=?,description=?,category=?,status='pending',updated_at=datetime('now') WHERE id=? AND user_id=?")->execute([$title,$description,$category,$id,$u['id']]);$pdo->commit();ok(adData(ownedAd($id,$u)));
         }
         if($method==='DELETE' && $action==='delete') { $pdo->prepare('DELETE FROM ads WHERE id=? AND user_id=?')->execute([$id,$u['id']]);ok(['deleted'=>true]); }
         if($method==='POST' && $action==='image') {

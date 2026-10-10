@@ -31,6 +31,7 @@ export function OriginalHome({ t, browse, create, categories }: { categories:Cat
           <div><p className="eyebrow">{t('اختَر ما يناسبك','Find what suits you')}</p><h2 className="mt-1 text-[21px] font-bold tracking-tight">{t('تصفّح الخدمات','Browse services')}</h2></div>
           <button onClick={() => browse()} className="text-xs font-bold text-[#47705c]">{t('عرض الكل ','View all ')}<ArrowLeft className="mr-1 inline" size={14} /></button>
         </div>
+        {!categories.length&&<p className="text-sm text-[#849088]">{t('لا توجد أقسام متاحة حاليًا.','No categories available at the moment.')}</p>}
         <div className="category-grid">
           {categories.map((category, index) => {
             const Icon = categoryIcons[category.icon]||Gavel;

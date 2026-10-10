@@ -26,7 +26,7 @@ SQL);
 }
 function categoriesData(PDO $pdo,bool $all=false): array {
     $rows=$pdo->query('SELECT c.*,(SELECT COUNT(*) FROM ads a WHERE a.category=c.name) AS ad_count FROM categories c '.($all?'':'WHERE c.is_active=1 ').'ORDER BY c.sort_order,c.id')->fetchAll();
-    foreach($rows as &$r){$r['id']=(int)$r['id'];$r['title']=$r['name'];$r['sort_order']=(int)$r['sort_order'];$r['is_active']=(bool)$r['is_active'];$r['ad_count']=(int)$r['ad_count'];$r['subcategories']=json_decode($r['subcategories'],true);}unset($r);return $rows;
+    foreach($rows as &$r){$r['id']=(int)$r['id'];$r['title']=$r['name'];$r['sort_order']=(int)$r['sort_order'];$r['is_active']=(bool)$r['is_active'];$r['ad_count']=(int)$r['ad_count'];$r['subcategories']=json_decode($r['subcategories'],true);if(!$all)unset($r['ad_count']);}unset($r);return $rows;
 }
 function validCategory(PDO $pdo,string $name,?string $previous=null): void {
     if($name===$previous)return;

@@ -227,8 +227,9 @@ try {
         rateLimitPublic('ads', 8, 60);
         $body = jsonBody(); $title = trim((string)($body['title'] ?? '')); $description = trim((string)($body['description'] ?? '')); $category = trim((string)($body['category'] ?? ''));
         if ($title === '' || mb_strlen($title) > 120 || $description === '' || mb_strlen($description) > 3000 || $category === '' || mb_strlen($category) > 80) fail(422, 'تحقق من العنوان والوصف والتصنيف.');
+        $pdo->beginTransaction();
         validCategory($pdo,$category);
-        $stmt = $pdo->prepare('INSERT INTO ads(title,description,category,status) VALUES(?,?,?,\'pending\')'); $stmt->execute([$title,$description,$category]);
+        $stmt = $pdo->prepare('INSERT INTO ads(title,description,category,status) VALUES(?,?,?,\'pending\')'); $stmt->execute([$title,$description,$category]);$pdo->commit();
         ok(['id' => (int)$pdo->lastInsertId(), 'status' => 'pending'], 201);
     }
     if ($resource === 'support' && $action === 'tickets' && $method === 'POST') {
@@ -268,10 +269,11 @@ try {
         $body=jsonBody();
         if($action==='ad') {
             $title=textField($body,'title',120);$description=textField($body,'description',3000,false);$category=textField($body,'category',80);
+            $pdo->beginTransaction();
             validCategory($pdo,$category);
             $status=$body['status']??'pending';if(!in_array($status,['pending','active'],true))fail(422,'حالة الإعلان غير صالحة.');
             $pdo->prepare('INSERT INTO ads(user_id,title,description,category,status) VALUES(?,?,?,?,?)')->execute([$user['id'],$title,$description,$category,$status]);
-            $id=(int)$pdo->lastInsertId();audit($user,'ad.create','ad',$id);ok(['id'=>$id],201);
+            $id=(int)$pdo->lastInsertId();audit($user,'ad.create','ad',$id);$pdo->commit();ok(['id'=>$id],201);
         }
         $name=textField($body,'name',100);$email=strtolower(textField($body,'email',190));$phone=textField($body,'phone',30,false);$password=textField($body,'password',200);
         if(!filter_var($email,FILTER_VALIDATE_EMAIL)||mb_strlen($password)<6||strlen($password)>72)fail(422,'تحقق من البريد وكلمة المرور (6 أحرف على الأقل و72 بايت كحد أقصى).');
@@ -286,8 +288,9 @@ try {
         foreach($items as &$item) $item['id']=(int)$item['id']; unset($item); ok(['items'=>$items]);
     }
     if ($action === 'ad' && in_array($method,['PATCH','DELETE'],true)) {
+        $pdo->beginTransaction();
         $id=positiveId(); $stmt=$pdo->prepare('SELECT id,category FROM ads WHERE id=?'); $stmt->execute([$id]); $existingAd=$stmt->fetch(); if(!$existingAd) fail(404,'الإعلان غير موجود.');
-        if($method==='DELETE'){ $pdo->prepare('DELETE FROM ads WHERE id=?')->execute([$id]); audit($user,'ad.delete','ad',$id); ok(['id'=>$id,'deleted'=>true]); }
+        if($method==='DELETE'){ $pdo->prepare('DELETE FROM ads WHERE id=?')->execute([$id]); audit($user,'ad.delete','ad',$id);$pdo->commit(); ok(['id'=>$id,'deleted'=>true]); }
         $body=jsonBody(); $allowed=['title','description','category','status']; $updates=[]; $values=[];
         foreach($allowed as $field){ if(!array_key_exists($field,$body)) continue; $value=$body[$field];
             if($field==='status'&&!in_array($value,['pending','active','rejected','blocked'],true)) fail(422,'حالة الإعلان غير صالحة.');
@@ -295,7 +298,7 @@ try {
             if($field==='category')validCategory($pdo,$value,$existingAd['category']);
             $updates[]="$field=?"; $values[]=$value;
         }
-        if(!$updates) fail(422,'لم يتم إرسال أي تغييرات.'); $updates[]="updated_at=datetime('now')"; $values[]=$id; $pdo->prepare('UPDATE ads SET '.implode(',',$updates).' WHERE id=?')->execute($values); audit($user,'ad.update','ad',$id,array_keys($body)); ok(['id'=>$id]);
+        if(!$updates) fail(422,'لم يتم إرسال أي تغييرات.'); $updates[]="updated_at=datetime('now')"; $values[]=$id; $pdo->prepare('UPDATE ads SET '.implode(',',$updates).' WHERE id=?')->execute($values); audit($user,'ad.update','ad',$id,array_keys($body));$pdo->commit(); ok(['id'=>$id]);
     }
     if ($action === 'users' && $method === 'GET') {
         $items=$pdo->query('SELECT id,name,email,phone,role,is_banned,created_at FROM users ORDER BY created_at DESC LIMIT 500')->fetchAll(); foreach($items as &$item) $item=userPublic($item); unset($item); ok(['items'=>$items]);
