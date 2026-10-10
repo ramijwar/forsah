@@ -2,6 +2,7 @@
 """Build a flat extract-in-place hosting archive, with an EMPTY schema seed."""
 from pathlib import Path
 import re
+import shutil
 import sqlite3
 import tempfile
 from zipfile import ZipFile, ZIP_DEFLATED
@@ -13,10 +14,6 @@ def main():
     if not (ROOT / 'dist/index.html').is_file():
         raise SystemExit('Run npm run build first')
     OUT.parent.mkdir(exist_ok=True)
-    with ZipFile(OUT.parent / 'forsah-ui-update.zip', 'w', ZIP_DEFLATED) as ui:
-        for file in sorted((ROOT / 'dist').rglob('*')):
-            if file.is_file(): ui.write(file, str(file.relative_to(ROOT / 'dist')))
-
     with tempfile.TemporaryDirectory(prefix='forsah-seed-') as temp:
         seed = Path(temp) / 'forsah.seed.sqlite'
         connection = sqlite3.connect(seed)
@@ -47,15 +44,17 @@ def main():
         with ZipFile(OUT) as archive:
             assert archive.testzip() is None
             assert {'index.html','api.php','.htaccess','database/forsah.seed.sqlite'} <= set(archive.namelist())
-        # Safe upgrade patch: never includes a live DB, seed, user data or salt.
-        patch = OUT.parent / 'forsah-hosting-fix.zip'
-        with ZipFile(patch, 'w', ZIP_DEFLATED) as archive:
-            archive.write(ROOT / 'backend/config-loader.php', 'config-loader.php')
-            archive.write(ROOT / 'deployment/hosting-auto.php', 'hosting-auto.php')
-            archive.write(ROOT / 'deployment/hosting.htaccess', '.htaccess')
-            archive.write(ROOT / 'deployment/INSTALL.txt', 'INSTALL.txt')
-            archive.writestr('database/.htaccess', 'Require all denied\n')
-        print(f'Created {patch}: configuration/diagnostics only; no database files.')
+        # GitHub wraps this directory once: users download deployment files,
+        # not a ZIP containing several other ZIPs. Include hidden guard files.
+        folder = OUT.parent / 'hosting-ready'
+        if folder.exists(): shutil.rmtree(folder)
+        with ZipFile(OUT) as archive: archive.extractall(folder)
+        assert (folder / '.htaccess').is_file()
+        assert (folder / 'database/.htaccess').is_file()
+        assert not list(folder.rglob('*.zip'))
+        assert not (folder / 'database/forsah.sqlite').exists()
+        for obsolete in ['forsah-hosting-fix.zip', 'forsah-ui-update.zip']:
+            (OUT.parent / obsolete).unlink(missing_ok=True)
         print(f'Created {OUT}: {len(tables)} empty SQLite tables, no user data or credentials.')
 
 if __name__ == '__main__': main()

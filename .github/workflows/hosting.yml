@@ -52,8 +52,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: forsah-hosting-ready
-          path: |
-            artifacts/forsah-hosting-ready.zip
-            artifacts/forsah-hosting-fix.zip
-            artifacts/forsah-ui-update.zip
+          path: artifacts/hosting-ready/
+          include-hidden-files: true
           if-no-files-found: error

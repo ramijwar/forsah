@@ -24,7 +24,14 @@ def scenario(legacy=False, protected=True, fault=None, marker_prefix="", comment
         if fault=='DB_GUARD_RULE_INVALID': (app/'database/.htaccess').write_text('Require all granted\n')
         if fault=='DB_SEED_MISSING': (app/'database/forsah.seed.sqlite').unlink()
         if legacy:
-            old=web/'var';old.mkdir();sqlite3.connect(old/'forsah.sqlite').close()
+            legacy_files={}
+            for old in [web/'var',app/'var',home/'forsah-private']:
+                old.mkdir()
+                conn=sqlite3.connect(old/'forsah.sqlite')
+                conn.execute('CREATE TABLE old_data(value TEXT)');conn.execute("INSERT INTO old_data VALUES('keep me')");conn.commit();conn.close()
+                legacy_files[old/'forsah.sqlite']=(old/'forsah.sqlite').read_bytes()
+            config=home/'forsah-private/config.php';config.write_text('<?php throw new Exception("Must not load legacy config");')
+            legacy_files[config]=config.read_bytes()
         env={k:v for k,v in os.environ.items() if not k.startswith('FORSAH_')}
         # Built-in PHP does not process .htaccess. Simulate the Apache marker
         # for functional tests; also test fail-closed without it.
@@ -48,7 +55,7 @@ def scenario(legacy=False, protected=True, fault=None, marker_prefix="", comment
             assert request('index.html')[0]==200
             status,raw=request('api.php?resource=health')
             private=app/'database/forsah.sqlite'
-            expected_error = (None if fault=='DB_SEED_MISSING' else fault) or ('DB_LEGACY_FOUND' if legacy else 'DB_GUARD_SIGNAL_MISSING' if not protected else None)
+            expected_error = (None if fault=='DB_SEED_MISSING' else fault) or ('DB_GUARD_SIGNAL_MISSING' if not protected else None)
             if expected_error:
                 assert status==503,(status,raw)
                 payload=json.loads(raw)
@@ -61,6 +68,9 @@ def scenario(legacy=False, protected=True, fault=None, marker_prefix="", comment
             assert json.loads(raw)['data']['version']==2
             assert json.loads(raw)['data']['images_supported'] is True
             assert private.exists() and not (app/'forsah.sqlite').exists()
+            if legacy:
+                for old,original in legacy_files.items(): assert old.read_bytes()==original
+            check=sqlite3.connect(private);assert check.execute('SELECT COUNT(*) FROM users').fetchone()[0]==0;check.close()
             if fault!='DB_SEED_MISSING':
                 seed=sqlite3.connect(app/'database/forsah.seed.sqlite')
                 assert seed.execute('SELECT COUNT(*) FROM users').fetchone()[0]==0;seed.close()
@@ -93,6 +103,7 @@ def scenario(legacy=False, protected=True, fault=None, marker_prefix="", comment
 if __name__=='__main__':
     scenario()
     scenario(legacy=True)
+    scenario(legacy=True,fault="DB_SEED_MISSING")
     scenario(protected=False)
     scenario(marker_prefix='REDIRECT_REDIRECT_',comments=True)
     for fault in ['DB_GUARD_FILE_MISSING','DB_GUARD_RULE_INVALID','DB_SEED_MISSING']:

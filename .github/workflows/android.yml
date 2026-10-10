@@ -32,12 +32,6 @@ jobs:
       - run: php -l backend/api.php && php -l backend/market.php && php -l backend/config-loader.php && php -l backend/bootstrap-admin.php
       - run: python3 scripts/run-checked.py python3 backend/tests/smoke.py
       - run: python3 scripts/run-checked.py python3 backend/tests/market.py
-      - run: python3 scripts/package-server.py
-      - uses: actions/upload-artifact@v4
-        with:
-          name: forsah-server-v2
-          path: artifacts/forsah-server-v2.zip
-          if-no-files-found: error
   live-server:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -79,7 +73,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: forsah-debug-apk
-          path: artifacts/
+          path: |
+            artifacts/forsah-debug.apk
+            artifacts/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 30
       - uses: actions/upload-artifact@v4

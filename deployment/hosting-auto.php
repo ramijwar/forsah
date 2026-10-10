@@ -9,20 +9,6 @@ function hostingFailure(string $reason, string $detail): never { throw new Hosti
 /** Drop-in package: local database directory must be denied by the web server. */
 function initializeHostingDatabase(): void {
     if (getenv('FORSAH_DB_PATH')) return;
-    $configuredRoot = getenv('FORSAH_WEB_ROOT') ?: ($_SERVER['DOCUMENT_ROOT'] ?? '');
-    $root = $configuredRoot !== '' ? realpath($configuredRoot) : false;
-    if (!$root || $root === DIRECTORY_SEPARATOR) {
-        // CLI helper, normally installed in public_html/forsah.
-        $root = realpath(dirname(__DIR__));
-    }
-    if (!$root) hostingFailure('DB_ROOT_UNKNOWN', 'Cannot determine hosting document root');
-    $boundary = $root;
-    // A subdomain can live below public_html; do not create its private DB in
-    // a directory still accessible through the primary domain.
-    for ($dir = $root; dirname($dir) !== $dir; $dir = dirname($dir)) {
-        if (in_array(strtolower(basename($dir)), ['public_html','httpdocs','htdocs','wwwroot'], true)) $boundary = $dir;
-    }
-    $previousPrivate = dirname($boundary) . '/forsah-private';
     $private = __DIR__ . '/database';
     if (is_link($private)) hostingFailure('DB_UNSAFE_PATH', 'Private database directory must not be a symlink');
     umask(0077);
@@ -40,11 +26,9 @@ function initializeHostingDatabase(): void {
     if (!$lock || !flock($lock, LOCK_EX)) hostingFailure('DB_LOCK_FAILED', 'Cannot lock database initialization');
     try {
         if (!file_exists($path)) {
-            // Do not silently create a fresh identity store when upgrading a
-            // legacy installation. Point at/migrate its DB explicitly instead.
-            foreach ([__DIR__.'/var/forsah.sqlite', dirname(__DIR__).'/var/forsah.sqlite', $previousPrivate.'/forsah.sqlite', $previousPrivate.'/config.php'] as $legacy) {
-                if (is_file($legacy)) hostingFailure('DB_LEGACY_FOUND', 'Existing legacy database detected; migrate it without replacing your users');
-            }
+            // Fresh-install policy explicitly requested by the owner: legacy files
+            // are left untouched, but do not block a new local identity store.
+            // An existing local database is NEVER reset, including on re-extraction.
             $seed = __DIR__ . '/database/forsah.seed.sqlite';
             $temp = tempnam($private, '.install-');
             if ($temp === false) hostingFailure('DB_TEMP_CREATE_FAILED', 'Cannot create database file');
@@ -84,8 +68,6 @@ try {
         'DB_DIRECTORY_UNREADABLE' => 'لا يستطيع PHP الوصول إلى مجلد database. تحقق من ملكيته وصلاحياته.',
         'DB_DIRECTORY_NOT_WRITABLE' => 'مجلد database غير قابل للكتابة بواسطة PHP. صحح الملكية والصلاحيات من لوحة الاستضافة، ولا تستخدم 777.',
         'DB_LOCK_FAILED' => 'تعذر فتح ملف القفل داخل database. تحقق من قابلية كتابة المجلد وملف install.lock بواسطة PHP.',
-        'DB_LEGACY_FOUND' => 'تم اكتشاف قاعدة أو إعداد سابق خارج المسار المحلي. انقل نسخة SQLite متسقة إلى database/forsah.sqlite وفق INSTALL.txt؛ لا تستبدل بياناتك بقاعدة فارغة.',
-        'DB_SEED_MISSING' => 'القاعدة الأولية database/forsah.seed.sqlite مفقودة أو غير قابلة للقراءة. ارفعها من الحزمة الكاملة إذا كان التثبيت جديدًا؛ لا تستبدل قاعدة موجودة.',
         'DB_FILE_NOT_WRITABLE' => 'ملف database/forsah.sqlite غير قابل للكتابة بواسطة PHP. تحقق من ملكيته وصلاحياته.',
         'DB_UNSAFE_PATH' => 'مسار القاعدة غير آمن أو يستخدم رابطًا رمزيًا. استخدم مجلد database الحقيقي داخل التطبيق.',
         'DB_TEMP_CREATE_FAILED' => 'تعذر إنشاء ملف داخل database. تحقق من صلاحيات الكتابة ومساحة الاستضافة.',
