@@ -4,6 +4,7 @@ declare(strict_types=1);
 // Additive migrations: never replace the existing users, ads or administration data.
 function marketSchema(PDO $pdo): void {
     $pdo->exec(<<<'SQL'
+CREATE INDEX IF NOT EXISTS ads_latest ON ads(status,created_at DESC,id DESC);
 CREATE TABLE IF NOT EXISTS favorites (
  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
  ad_id INTEGER NOT NULL REFERENCES ads(id) ON DELETE CASCADE,

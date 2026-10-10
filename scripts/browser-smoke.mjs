@@ -96,10 +96,16 @@ try {
    assert(!(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)),`Horizontal overflow: ${folder}`);
  }
  assert(await page.locator('.latest-card').count()===10,'Homepage does not show ten listings');
- assert(await page.locator('.category-count').first().innerText()==='١٠ إعلان','Category count not rendered');
+ const countText=await page.locator('.category-count').first().textContent();
+ assert(await page.locator('.category-count').first().evaluate(e=>e.textContent.trim()===new Intl.NumberFormat('ar').format(10)+' إعلان'),`Category count not rendered: ${JSON.stringify(countText)}`);
  await page.locator('.latest-section').scrollIntoViewIfNeeded();
  await page.getByRole('button',{name:'الإعلان التالي',exact:true}).click();
  await page.waitForFunction(()=>Math.abs(document.querySelector('.latest-track').scrollLeft)>10);
+ await page.locator('.latest-track').evaluate(e=>{e.scrollLeft=-e.scrollWidth;});
+ await page.waitForFunction(()=>document.querySelector('[aria-label="الإعلان التالي"]').disabled);
+ const lastOffset=await page.locator('.latest-track').evaluate(e=>Math.abs(e.scrollLeft));
+ await page.getByRole('button',{name:'الإعلان السابق',exact:true}).click();
+ await page.waitForFunction(before=>Math.abs(document.querySelector('.latest-track').scrollLeft)<before-10,lastOffset);
  assert(publicImageRequests.every(size=>size==='thumb'),'Homepage loaded full-size images');
  await page.screenshot({path:'artifacts/visual/home-latest-carousel.png',fullPage:true});
  await page.evaluate(()=>window.scrollTo(0,0));await page.waitForTimeout(150);
