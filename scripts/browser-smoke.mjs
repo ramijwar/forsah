@@ -52,6 +52,7 @@ try {
  let rejectAdminSave=false;const adminWrites=[];
  const account={id:1,name:'Test Member',email:'member@example.test',role:'user',phone:''};
  await page.route('https://t3lam.site/**',route=>{
+   if(route.request().method()==='OPTIONS')return route.fulfill({status:204,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,content-type','Access-Control-Allow-Methods':'GET,POST,PATCH,DELETE,OPTIONS'}});
    const url=new URL(route.request().url()),resource=url.searchParams.get('resource'),action=url.searchParams.get('action');let data;
    if(resource==='image')return route.fulfill({contentType:'image/svg+xml',headers:{'Access-Control-Allow-Origin':'*'},body:'<svg xmlns="http://www.w3.org/2000/svg" width="400" height="280"><rect width="400" height="280" fill="green"/></svg>'});
    if(resource==='admin') {
