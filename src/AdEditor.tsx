@@ -47,6 +47,6 @@ export default function AdEditor({ad,initialCategory,categories,t,token,onSave,o
     {!!(existing+uploaded)&&<p>{t(`صور محفوظة: ${existing+uploaded} / 4`,`Saved photos: ${existing+uploaded} / 4`)}</p>}
     <div className="draft-photo-grid">{files.map((file,i)=><div key={`${file.name}-${file.lastModified}-${i}`}><PhotoPreview file={file}/><button type="button" disabled={locked} onClick={()=>setFiles(previous=>previous.filter((_,index)=>index!==i))}>{t('إزالة','Remove')}</button></div>)}</div>
     {error&&<p className="market-error" role="alert">{error}</p>}{progress&&<p role="status">{progress}</p>}
-    <button className="market-primary" disabled={locked||!categories.length}>{t('حفظ للمراجعة','Save for review')}</button>
+    <button className="market-primary" disabled={locked||(!categories.length&&!ad)}>{t('حفظ للمراجعة','Save for review')}</button>
   </form>;
 }

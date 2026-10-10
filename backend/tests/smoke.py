@@ -136,6 +136,10 @@ def main() -> None:
             call(f'resource=admin&action=category&id={cid}','DELETE',{'replacement_id':replacement['id']},admin_token)
             assert call(f'resource=market&action=detail&id={cat_ad}')['data']['category']==replacement['name']
             assert all(c['id']!=cid for c in call('resource=admin&action=categories',token=admin_token)['data']['items'])
+            unused_seed=next(c for c in call('resource=services')['data'] if c['name']=='الخدمات اللوجستية')
+            call(f"resource=admin&action=category&id={unused_seed['id']}",'DELETE',{},admin_token)
+            call('resource=health')
+            assert all(c['id']!=unused_seed['id'] for c in call('resource=services')['data'])
             # Reopening the API does not resurrect removed seed categories.
             empty_id=call('resource=admin&action=category','POST',{**category_body,'name':'Disposable'},admin_token,expected=201)['data']['id']
             call(f'resource=admin&action=category&id={empty_id}','DELETE',{},admin_token)

@@ -13,7 +13,7 @@ import urllib.error
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
-PASSWORD = 'Secure-test-password-2026'
+PASSWORD = 'abc123'  # Requested six-character minimum, including first CLI owner.
 
 def main():
     with tempfile.TemporaryDirectory(prefix='forsah-market-') as temp:
@@ -129,10 +129,11 @@ def main():
             call('resource=auth&action=me',token=buyer,expected=401)
             call(f'resource=chat&action=messages&id={cid}',token=seller,expected=404)
             call(f'resource=admin&action=user&id={buyer_id}','PATCH',{'is_banned':False},admin)
-            call('resource=auth&action=password','POST',{'current_password':'wrong','password':'Replacement-password-123'},buyer,422)
-            call('resource=auth&action=password','POST',{'current_password':PASSWORD,'password':'Replacement-password-123'},buyer)
+            call('resource=auth&action=password','POST',{'current_password':PASSWORD,'password':'12345'},buyer,422)
+            call('resource=auth&action=password','POST',{'current_password':'wrong','password':'def456'},buyer,422)
+            call('resource=auth&action=password','POST',{'current_password':PASSWORD,'password':'def456'},buyer)
             call('resource=auth&action=me',token=buyer,expected=401)
-            buyer=call('resource=auth&action=login','POST',{'email':'buyer@example.test','password':'Replacement-password-123'})['data']['token']
+            buyer=call('resource=auth&action=login','POST',{'email':'buyer@example.test','password':'def456'})['data']['token']
             call('resource=auth&action=logout','POST',token=buyer)
             call('resource=auth&action=me',token=buyer,expected=401)
             call(f'resource=market&action=delete&id={aid}','DELETE',token=seller)
