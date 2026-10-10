@@ -28,6 +28,44 @@ public class SessionVaultPlugin extends Plugin {
     private SharedPreferences prefs() {
         return getContext().getSharedPreferences("forsah-vault", Context.MODE_PRIVATE);
     }
+    // Persistent, encrypted login independent of the optional biometric lock.
+    private SecretKey persistentKey() throws Exception {
+        KeyStore store=KeyStore.getInstance("AndroidKeyStore"); store.load(null);
+        String alias="forsah.persistent.v1";
+        if(!store.containsAlias(alias)) {
+            KeyGenerator generator=KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES,"AndroidKeyStore");
+            generator.init(new KeyGenParameterSpec.Builder(alias,KeyProperties.PURPOSE_ENCRYPT|KeyProperties.PURPOSE_DECRYPT)
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build());
+            generator.generateKey();
+        }
+        return (SecretKey)store.getKey(alias,null);
+    }
+    @PluginMethod public void persist(PluginCall call) {
+        try {
+            String token=call.getString("token","");
+            SharedPreferences storage=getContext().getSharedPreferences("forsah-persistent",Context.MODE_PRIVATE);
+            if(token.isEmpty()) { if(!storage.edit().clear().commit()) throw new Exception("Storage failed"); }
+            else {
+                if(!token.matches("[A-Za-z0-9_-]{40,256}")) throw new Exception("Invalid token");
+                Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.ENCRYPT_MODE,persistentKey());
+                if(!storage.edit().putString("data",Base64.encodeToString(cipher.doFinal(token.getBytes(StandardCharsets.UTF_8)),Base64.NO_WRAP))
+                    .putString("iv",Base64.encodeToString(cipher.getIV(),Base64.NO_WRAP)).commit()) throw new Exception("Storage failed");
+            }
+            call.resolve();
+        } catch(Exception e) { call.reject("Cannot save session",e); }
+    }
+    @PluginMethod public void restore(PluginCall call) {
+        try {
+            SharedPreferences storage=getContext().getSharedPreferences("forsah-persistent",Context.MODE_PRIVATE);
+            String token="";
+            if(storage.contains("data")) {
+                Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
+                cipher.init(Cipher.DECRYPT_MODE,persistentKey(),new GCMParameterSpec(128,Base64.decode(storage.getString("iv",""),Base64.NO_WRAP)));
+                token=new String(cipher.doFinal(Base64.decode(storage.getString("data",""),Base64.NO_WRAP)),StandardCharsets.UTF_8);
+            }
+            JSObject result=new JSObject();result.put("token",token);call.resolve(result);
+        } catch(Exception e) { call.reject("Cannot restore session",e); }
+    }
     @PluginMethod
     public void available(PluginCall call) {
         JSObject result = new JSObject();

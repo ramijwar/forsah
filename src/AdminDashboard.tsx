@@ -49,8 +49,8 @@ function dateLabel(value: string) {
 function roleLabel(role: Role) { return role === 'super_admin' ? 'مدير فائق' : role === 'admin' ? 'مدير' : role === 'support' ? 'دعم فني' : 'مستخدم'; }
 function statusLabel(status: string) { return ({ pending: 'قيد المراجعة', active: 'نشط', rejected: 'مرفوض', blocked: 'محظور', open: 'مفتوحة', in_progress: 'قيد المعالجة', resolved: 'مغلقة' } as Record<string, string>)[status] ?? status; }
 
-export default function AdminDashboard() {
-  const [token, setToken] = useState(() => { try { return sessionStorage.getItem(TOKEN_KEY) ?? ''; } catch { return ''; } });
+export default function AdminDashboard({ memberToken = '' }: { memberToken?: string }) {
+  const [token, setToken] = useState(() => { try { return memberToken || sessionStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; } });
   const [profile, setProfile] = useState<AdminProfile | null>(null);
   const [section, setSection] = useState<Section>('overview');
   const [stats, setStats] = useState<Stats>({ users: 0, active_ads: 0, pending_ads: 0, pending_reports: 0, open_tickets: 0 });

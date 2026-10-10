@@ -8,6 +8,8 @@ export function apiUrl(resource: string, params: Record<string, string> = {}, ba
   return url.toString();
 }
 
+export class ApiError extends Error { constructor(message: string, public status: number) { super(message); } }
+
 export async function apiRequest<T>(resource: string, options: RequestInit = {}, params: Record<string, string> = {}): Promise<T> {
   const response = await fetch(apiUrl(resource, params), {
     ...options,
@@ -16,7 +18,7 @@ export async function apiRequest<T>(resource: string, options: RequestInit = {},
   let result: { ok?: boolean; data?: T; error?: string };
   try { result = await response.json(); } catch { throw new Error('استجابة الخادم غير صالحة'); }
   if (!response.ok || result.ok !== true || result.data === undefined) {
-    throw new Error(result.error || 'تعذر إتمام الطلب');
+    throw new ApiError(result.error || 'تعذر إتمام الطلب', response.status);
   }
   return result.data;
 }

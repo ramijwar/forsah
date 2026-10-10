@@ -27,6 +27,17 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS messages_conversation ON messages(conversation_id,id);
 SQL);
+    $columns=$pdo->query('PRAGMA table_info(ad_images)')->fetchAll(PDO::FETCH_COLUMN,1);
+    if(!in_array('thumbnail',$columns,true)) $pdo->exec('ALTER TABLE ad_images ADD COLUMN thumbnail BLOB');
+}
+function imageThumbnail(string $content): string {
+    $source=@imagecreatefromstring($content);
+    if(!$source) fail(422,'Invalid image');
+    $scale=min(1,400/max(imagesx($source),imagesy($source)));
+    $thumb=imagecreatetruecolor(max(1,(int)(imagesx($source)*$scale)),max(1,(int)(imagesy($source)*$scale)));
+    imagecopyresampled($thumb,$source,0,0,0,0,imagesx($thumb),imagesy($thumb),imagesx($source),imagesy($source));
+    ob_start();imagejpeg($thumb,null,75);$bytes=ob_get_clean();imagedestroy($source);imagedestroy($thumb);
+    return $bytes;
 }
 function member(): array {
     $header = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
@@ -83,7 +94,17 @@ function marketRoutes(string $resource,string $action,string $method,PDO $pdo): 
                 rateLimitPublic('register',5,60); $name=textField($b,'name',100);
                 if(strlen($password)<12 || strlen($password)>72)fail(422,'كلمة المرور بين 12 و72 بايت / Password must be 12–72 bytes');
                 // Only register new identities. Never claim a guest/support/admin record by email.
-                $pdo->prepare("INSERT INTO users(name,email,password_hash,role) VALUES(?,?,?,'user')")->execute([$name,$email,password_hash($password,PASSWORD_DEFAULT)]);
+                $hash=password_hash($password,PASSWORD_DEFAULT);
+                // Serialize the first-account election. The marker is never reset if users are deleted.
+                $pdo->exec('BEGIN IMMEDIATE');
+                try {
+                    $pdo->exec('CREATE TABLE IF NOT EXISTS app_state (key TEXT PRIMARY KEY,value TEXT NOT NULL)');
+                    $claimed=$pdo->query("SELECT value FROM app_state WHERE key='first_account_claimed'")->fetchColumn();
+                    $role=(!$claimed && (int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn()===0)?'super_admin':'user';
+                    $pdo->prepare('INSERT INTO users(name,email,password_hash,role) VALUES(?,?,?,?)')->execute([$name,$email,$hash,$role]);
+                    $pdo->exec("INSERT OR IGNORE INTO app_state(key,value) VALUES('first_account_claimed','1')");
+                    $pdo->exec('COMMIT');
+                } catch (Throwable $e) { $pdo->exec('ROLLBACK'); throw $e; }
             }
             $q=$pdo->prepare('SELECT id,name,email,phone,role,password_hash,is_banned FROM users WHERE email=?'); $q->execute([$email]); $u=$q->fetch();
             if(!$u || !$u['password_hash'] || !password_verify($password,$u['password_hash']) || (int)$u['is_banned']===1)fail(401,'بيانات الدخول غير صحيحة / Invalid credentials');
@@ -148,9 +169,10 @@ function marketRoutes(string $resource,string $action,string $method,PDO $pdo): 
             // Re-encode, stripping executable payloads and metadata (including GPS).
             ob_start();imagejpeg($image,null,85);$content=ob_get_clean();imagedestroy($image);
             if(strlen($content)>2*1024*1024)fail(422,'Image too large after decoding');
+            $thumbnail=imageThumbnail($content);
             $pdo->beginTransaction();
-            $q=$pdo->prepare('SELECT COUNT(*) FROM ad_images WHERE ad_id=?');$q->execute([$id]);if((int)$q->fetchColumn()>=3){$pdo->rollBack();fail(422,'3 images maximum');}
-            $q=$pdo->prepare('INSERT INTO ad_images(ad_id,mime,content) VALUES(?,?,?)');$q->bindValue(1,$id,PDO::PARAM_INT);$q->bindValue(2,'image/jpeg');$q->bindValue(3,$content,PDO::PARAM_LOB);$q->execute();
+            $q=$pdo->prepare('SELECT COUNT(*) FROM ad_images WHERE ad_id=?');$q->execute([$id]);if((int)$q->fetchColumn()>=4){$pdo->rollBack();fail(422,'4 images maximum');}
+            $q=$pdo->prepare('INSERT INTO ad_images(ad_id,mime,content,thumbnail) VALUES(?,?,?,?)');$q->bindValue(1,$id,PDO::PARAM_INT);$q->bindValue(2,'image/jpeg');$q->bindValue(3,$content,PDO::PARAM_LOB);$q->bindValue(4,$thumbnail,PDO::PARAM_LOB);$q->execute();
             $pdo->prepare("UPDATE ads SET status='pending' WHERE id=?")->execute([$id]);$pdo->commit();ok(adData(ownedAd($id,$u)),201);
         }
         if($method==='DELETE' && $action==='image-delete') {
@@ -159,8 +181,17 @@ function marketRoutes(string $resource,string $action,string $method,PDO $pdo): 
         }
     }
     if($resource==='image' && $method==='GET') {
-        $q=$pdo->prepare('SELECT ad_id,mime,content FROM ad_images WHERE id=?');$q->execute([positiveId()]);$img=$q->fetch();if(!$img)fail(404,'Image not found');
-        readableAd((int)$img['ad_id'],optionalMember());header('Content-Type: '.$img['mime']);header('Content-Length: '.strlen($img['content']));header('Content-Security-Policy: default-src \'none\'');echo $img['content'];exit;
+        $small=($_GET['size']??'')==='thumb';
+        $column=$small?'thumbnail':'content';
+        $q=$pdo->prepare("SELECT ad_id,mime,$column AS content FROM ad_images WHERE id=?");$q->execute([positiveId()]);$img=$q->fetch();if(!$img)fail(404,'Image not found');
+        readableAd((int)$img['ad_id'],optionalMember());
+        if($small && $img['content']===null) {
+            if(!extension_loaded('gd'))fail(503,'GD required for thumbnails');
+            $q=$pdo->prepare('SELECT content FROM ad_images WHERE id=?');$q->execute([positiveId()]);
+            $img['content']=imageThumbnail($q->fetchColumn());
+            $q=$pdo->prepare('UPDATE ad_images SET thumbnail=? WHERE id=?');$q->bindValue(1,$img['content'],PDO::PARAM_LOB);$q->bindValue(2,positiveId(),PDO::PARAM_INT);$q->execute();
+        }
+        header('Cache-Control: private, no-store');header('Content-Type: '.$img['mime']);header('Content-Length: '.strlen($img['content']));header('Content-Security-Policy: default-src \'none\'');echo $img['content'];exit;
     }
     if($resource==='favorites') {
         $u=member();

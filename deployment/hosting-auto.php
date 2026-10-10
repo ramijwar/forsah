@@ -46,11 +46,12 @@ function initializeHostingDatabase(): void {
                 if (is_file($legacy)) hostingFailure('DB_LEGACY_FOUND', 'Existing legacy database detected; migrate it without replacing your users');
             }
             $seed = __DIR__ . '/database/forsah.seed.sqlite';
-            if (!is_file($seed) || !is_readable($seed)) hostingFailure('DB_SEED_MISSING', 'Database seed missing; extract the complete hosting ZIP');
             $temp = tempnam($private, '.install-');
             if ($temp === false) hostingFailure('DB_TEMP_CREATE_FAILED', 'Cannot create database file');
             try {
-                if (!copy($seed, $temp) || !chmod($temp, 0600) || !rename($temp, $path)) hostingFailure('DB_INSTALL_FAILED', 'Cannot install database');
+                if (is_file($seed) && !copy($seed, $temp)) hostingFailure('DB_INSTALL_FAILED', 'Cannot copy database seed');
+                // Without a seed, PDO initializes this empty file using the application schema.
+                if (!chmod($temp, 0600) || !rename($temp, $path)) hostingFailure('DB_INSTALL_FAILED', 'Cannot install database');
             } finally { if (is_file($temp)) unlink($temp); }
         }
         if (is_link($path)) hostingFailure('DB_UNSAFE_PATH', 'Database must not be a symlink');

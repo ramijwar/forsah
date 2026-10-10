@@ -4,8 +4,8 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import App from '../src/App';
-import { apiRequest } from '../src/api';
-vi.mock('../src/api', () => ({ apiRequest: vi.fn(), apiUrl: () => 'https://t3lam.site/forsah/api.php' }));
+import { ApiError, apiRequest } from '../src/api';
+vi.mock('../src/api', async (original) => ({ ...await original<typeof import('../src/api')>(), apiRequest: vi.fn() }));
 const api = vi.mocked(apiRequest);
 const user = { id: 1, name: 'Test User', email: 'test@example.test', phone: null, role: 'user' };
 const ad = { id: 10, user_id: 1, title: 'My real listing', description: 'Details', category: 'الحراج الشعبي', status: 'pending', images: [] };
@@ -115,4 +115,46 @@ it('member bell contents are built from actual account endpoints, not invented m
   await userEvent.setup().click(screen.getByRole('button',{name:'الإشعارات',exact:true}));
   expect(await screen.findByText('Actual message')).toBeTruthy();expect(await screen.findByText('Real ticket')).toBeTruthy();
   expect(screen.getByText('My real listing')).toBeTruthy();
+});
+
+it('restores a login after browser session storage is cleared',async()=>{
+  localStorage.setItem('forsah-member-token','persistent-session');
+  mount('/account');
+  expect(await screen.findByText('تسجيل الخروج')).toBeTruthy();
+  expect(api).toHaveBeenCalledWith('auth',expect.objectContaining({headers:expect.objectContaining({Authorization:'Bearer persistent-session'})}),expect.objectContaining({action:'me'}));
+});
+it('does not erase a saved session on temporary server/network failure',async()=>{
+  localStorage.setItem('forsah-member-token','persistent-session');
+  api.mockRejectedValue(new Error('offline'));mount('/account');
+  await screen.findByText('offline');
+  expect(localStorage.getItem('forsah-member-token')).toBe('persistent-session');
+});
+it('clears an expired session only on unauthorized response',async()=>{
+  localStorage.setItem('forsah-member-token','expired-session');
+  api.mockRejectedValue(new ApiError('expired',401));mount('/account');
+  await waitFor(()=>expect(localStorage.getItem('forsah-member-token')).toBeNull());
+});
+it('loads only thumbnails in listing results',async()=>{
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response('image')));
+  vi.stubGlobal('URL',class extends URL { static createObjectURL(){return 'blob:test';} static revokeObjectURL(){} });
+  api.mockImplementation(async(resource)=>resource==='market'?{items:[{...ad,images:[11,12]}],has_more:false}:[]);
+  mount('/search');await screen.findByText(ad.title);
+  await waitFor(()=>expect(fetch).toHaveBeenCalled());
+  expect(vi.mocked(fetch).mock.calls.every(([url])=>String(url).includes('size=thumb'))).toBe(true);
+});
+it('loads only the selected full photo and switches the detail carousel',async()=>{
+  vi.stubGlobal('fetch',vi.fn().mockImplementation(async()=>new Response('image')));
+  vi.stubGlobal('URL',class extends URL { static createObjectURL(){return 'blob:test';} static revokeObjectURL(){} });
+  api.mockImplementation(async(resource,_options,params)=>{
+    if(resource==='market'&&params?.action==='detail')return {...ad,images:[11,12,13,14]};
+    return [];
+  });
+  mount('/ad/10');const actions=userEvent.setup();
+  await screen.findByRole('button',{name:'الصورة التالية'});
+  const originals=()=>vi.mocked(fetch).mock.calls.map(([url])=>new URL(String(url))).filter(url=>!url.searchParams.has('size')).map(url=>url.searchParams.get('id'));
+  await waitFor(()=>expect(originals()).toEqual(['11']));
+  await actions.click(screen.getByRole('button',{name:'الصورة التالية'}));
+  await waitFor(()=>expect(originals()).toEqual(['11','12']));
+  await actions.click(screen.getByRole('button',{name:'عرض الصورة 4'}));
+  await waitFor(()=>expect(originals()).toEqual(['11','12','14']));
 });

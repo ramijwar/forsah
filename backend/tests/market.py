@@ -63,7 +63,7 @@ def main():
             assert len(call('resource=market&action=mine',token=seller)['data']['items'])==1
             assert call('resource=market&action=mine',token=buyer)['data']['items']==[]
             # Generate a real PNG via GD, then test re-encoding and access control.
-            png=subprocess.run(['php','-r','$im=imagecreatetruecolor(8,8);imagepng($im);'],check=True,capture_output=True).stdout
+            png=subprocess.run(['php','-r','$im=imagecreatetruecolor(800,600);imagepng($im);'],check=True,capture_output=True).stdout
             def upload(data, token, expected=201):
                 boundary='ForsahTestBoundary'
                 raw=(f'--{boundary}\r\nContent-Disposition: form-data; name="image"; filename="image.png"\r\nContent-Type: image/png\r\n\r\n'.encode()+data+f'\r\n--{boundary}--\r\n'.encode())
@@ -74,7 +74,13 @@ def main():
             call(f'resource=image&id={image}',expected=404)
             assert call(f'resource=image&id={image}',token=seller).startswith(b'\xff\xd8')
             assert call(f'resource=image&id={image}',token=admin).startswith(b'\xff\xd8')
-            upload(png,seller);upload(png,seller);upload(png,seller,422)
+            thumb=call(f'resource=image&id={image}&size=thumb',token=seller)
+            assert thumb.startswith(b'\xff\xd8') and len(thumb)<len(call(f'resource=image&id={image}',token=seller))
+            call(f'resource=image&id={image}&size=thumb',expected=404)
+            # Older image rows gain a persistent thumbnail on demand.
+            conn=sqlite3.connect(env['FORSAH_DB_PATH']);conn.execute('UPDATE ad_images SET thumbnail=NULL WHERE id=?',(image,));conn.commit();conn.close()
+            assert call(f'resource=image&id={image}&size=thumb',token=seller)==thumb
+            upload(png,seller);upload(png,seller);upload(png,seller);upload(png,seller,422)
             call(f'resource=admin&action=ad&id={aid}','PATCH',{'status':'active'},admin)
             assert len(call('resource=market&q=%D9%83%D8%B1%D8%B3%D9%8A')['data']['items'])==1
             assert call('resource=market&q=doesnotexist')['data']['items']==[]

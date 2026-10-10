@@ -48,7 +48,7 @@ def scenario(legacy=False, protected=True, fault=None, marker_prefix="", comment
             assert request('index.html')[0]==200
             status,raw=request('api.php?resource=health')
             private=app/'database/forsah.sqlite'
-            expected_error = fault or ('DB_LEGACY_FOUND' if legacy else 'DB_GUARD_SIGNAL_MISSING' if not protected else None)
+            expected_error = (None if fault=='DB_SEED_MISSING' else fault) or ('DB_LEGACY_FOUND' if legacy else 'DB_GUARD_SIGNAL_MISSING' if not protected else None)
             if expected_error:
                 assert status==503,(status,raw)
                 payload=json.loads(raw)
@@ -61,8 +61,9 @@ def scenario(legacy=False, protected=True, fault=None, marker_prefix="", comment
             assert json.loads(raw)['data']['version']==2
             assert json.loads(raw)['data']['images_supported'] is True
             assert private.exists() and not (app/'forsah.sqlite').exists()
-            seed=sqlite3.connect(app/'database/forsah.seed.sqlite')
-            assert seed.execute('SELECT COUNT(*) FROM users').fetchone()[0]==0;seed.close()
+            if fault!='DB_SEED_MISSING':
+                seed=sqlite3.connect(app/'database/forsah.seed.sqlite')
+                assert seed.execute('SELECT COUNT(*) FROM users').fetchone()[0]==0;seed.close()
             registered,raw=request('api.php?resource=auth&action=register',{'name':'Preserved user','email':'preserved@example.test','password':'Strong-test-password-123'})
             assert registered==201,(registered,raw)
             saved=json.loads(raw)['data']
@@ -75,10 +76,12 @@ def scenario(legacy=False, protected=True, fault=None, marker_prefix="", comment
             # CLI bootstrap uses the exact same auto-configured database.
             cli={**env,'FORSAH_ADMIN_NAME':'Hosting Admin','FORSAH_ADMIN_EMAIL':'admin@example.test','FORSAH_ADMIN_PASSWORD':'Admin-test-password-123'}
             result=subprocess.run(['php','bootstrap-admin.php'],cwd=app,env=cli,capture_output=True,text=True)
-            assert result.returncode==0,result.stderr
-            code,raw=request('api.php?resource=admin&action=login',{'email':'admin@example.test','password':'Admin-test-password-123'})
+            assert result.returncode==2,result.stderr
+            code,raw=request('api.php?resource=admin&action=login',{'email':'preserved@example.test','password':'Strong-test-password-123'})
             assert code==200,(code,raw)
-            assert saved['user']['role']=='user'
+            assert saved['user']['role']=='super_admin'
+            second,raw=request('api.php?resource=auth&action=register',{'name':'Second','email':'second@example.test','password':'Strong-test-password-456','role':'super_admin'})
+            assert second==201 and json.loads(raw)['data']['user']['role']=='user'
             assert len((app/'database/ip-salt').read_text())==64
             assert (private.stat().st_mode & 0o777)==0o600
         finally:
