@@ -7,6 +7,9 @@ export default function Overlay({label,close,children,panelClassName=""}:{label:
     const previous=document.activeElement as HTMLElement|null;
     const overflow=document.body.style.overflow;document.body.style.overflow='hidden';
     const el=panel.current;
+    const viewport=window.visualViewport;
+    const resize=()=>{if(el&&viewport)el.style.maxHeight=`${Math.max(80,viewport.height-48)}px`;};
+    resize();viewport?.addEventListener('resize',resize);
     (el?.querySelector<HTMLElement>('input,select,textarea,button,[tabindex="0"]')||el)?.focus({preventScroll:true});
     const key=(event:KeyboardEvent)=>{
       if(event.key==='Escape'){event.preventDefault();closeRef.current();}
@@ -19,7 +22,7 @@ export default function Overlay({label,close,children,panelClassName=""}:{label:
       }
     };
     document.addEventListener('keydown',key);
-    return()=>{document.body.style.overflow=overflow;document.removeEventListener('keydown',key);if(previous?.isConnected)previous.focus({preventScroll:true});};
+    return()=>{viewport?.removeEventListener('resize',resize);document.body.style.overflow=overflow;document.removeEventListener('keydown',key);if(previous?.isConnected)previous.focus({preventScroll:true});};
   },[]);
   return <div className="modal-backdrop" onPointerDown={e=>{if(e.target===e.currentTarget)close();}}><div className={`ad-modal ${panelClassName}`} ref={panel} role="dialog" aria-modal="true" aria-label={label} tabIndex={-1}>{children}</div></div>;
 }
