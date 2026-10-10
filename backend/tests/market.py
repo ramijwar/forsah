@@ -138,6 +138,27 @@ def main():
             call('resource=auth&action=me',token=buyer,expected=401)
             call(f'resource=market&action=delete&id={aid}','DELETE',token=seller)
             assert call('resource=market&action=mine',token=seller)['data']['items']==[]
+            # Public homepage: latest ten by creation time; private/banned data stays private.
+            assert call('resource=market&action=latest')['data']['items']==[]
+            category='الحراج الشعبي'
+            conn=sqlite3.connect(env['FORSAH_DB_PATH'])
+            ids=[]
+            for i in range(12):
+                ids.append(conn.execute("INSERT INTO ads(user_id,title,description,category,status,created_at) VALUES(?,?,?,?,?,?)",(seller_id,f'Latest {i}','Body',category,'active',f'2026-10-10 10:{i:02}:00')).lastrowid)
+            pending=conn.execute("INSERT INTO ads(user_id,title,description,category,status,created_at) VALUES(?,?,?,?,?,?)",(seller_id,'Private','Body',category,'pending','2026-10-11 00:00:00')).lastrowid
+            conn.execute('UPDATE users SET is_banned=1 WHERE id=?',(buyer_id,))
+            hidden=conn.execute("INSERT INTO ads(user_id,title,description,category,status,created_at) VALUES(?,?,?,?,?,?)",(buyer_id,'Banned owner','Body',category,'active','2026-10-12 00:00:00')).lastrowid
+            conn.commit();conn.close()
+            latest=call('resource=market&action=latest')['data']['items']
+            assert [a['id'] for a in latest]==list(reversed(ids))[:10]
+            assert [a['id'] for a in call('resource=market&action=latest',token=admin)['data']['items']]==[a['id'] for a in latest]
+            assert pending not in [a['id'] for a in latest] and hidden not in [a['id'] for a in latest]
+            counts={c['name']:c['ad_count'] for c in call('resource=services')['data']}
+            assert counts[category]==12 and counts['المفروشات والموبيليا']==0
+            admin_counts={c['name']:c['ad_count'] for c in call('resource=admin&action=categories',token=admin)['data']['items']}
+            assert admin_counts[category]==14
+            call(f'resource=admin&action=ad&id={ids[-1]}','PATCH',{'status':'blocked'},admin)
+            assert next(c for c in call('resource=services')['data'] if c['name']==category)['ad_count']==11
             print('PASS: v2 health, CORS, registration/login/logout/password revocation, roles, ad CRUD/moderation/search, actual image re-encoding and ownership, favorite isolation, chat delivery and IDOR protection, support round-trip, report identity, ban enforcement, deletion.')
         finally:
             server.terminate()

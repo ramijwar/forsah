@@ -137,6 +137,11 @@ function marketRoutes(string $resource,string $action,string $method,PDO $pdo): 
     }
     if ($resource==='market') {
         if ($method==='GET') {
+            if($action==='latest') {
+                // Homepage content is always public, even for a signed-in administrator.
+                $rows=$pdo->query("SELECT a.*,u.name AS owner_name FROM ads a LEFT JOIN users u ON u.id=a.user_id WHERE a.status='active' AND (u.is_banned IS NULL OR u.is_banned=0) ORDER BY a.created_at DESC,a.id DESC LIMIT 10")->fetchAll();
+                ok(['items'=>array_map('adData',$rows)]);
+            }
             $u=optionalMember();
             if ($action==='detail') ok(adData(readableAd(positiveId(),$u)));
             $where="a.status='active' AND (u.is_banned IS NULL OR u.is_banned=0)"; $args=[];

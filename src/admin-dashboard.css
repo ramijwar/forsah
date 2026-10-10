@@ -25,3 +25,30 @@
 .admin-topbar { position:sticky; top:0; z-index:25; background:var(--admin-bg); }
 .admin-modal input[type=checkbox] { width:22px; height:22px; }
 .admin-modal input[type=color] { min-height:44px; }
+
+/* Unified administrative dialogs: calm hierarchy, generous fields, persistent close. */
+.ad-modal.admin-dialog { display:block; width:min(100%,600px); padding:0; border:1px solid #dce7db; border-radius:26px; background:#fff; color:#203c2c; box-shadow:0 28px 90px #0c281e40; }
+.admin-dialog-header { position:sticky; top:0; z-index:2; padding:24px 24px 20px 76px; border-bottom:1px solid #e4ecdf; background:linear-gradient(120deg,#fbfdf8,#edf5e5); }
+.admin-dialog-title { display:flex; align-items:center; gap:13px; }
+.admin-dialog-icon { display:grid; flex-shrink:0; place-items:center; width:49px; height:49px; border:1px solid #d0e4bc; border-radius:16px; background:#e0f0ca; color:#24533b; }
+.admin-dialog-eyebrow { display:block; color:#718666; font-size:10px; font-weight:600; letter-spacing:.2px; }
+.admin-dialog-title h2 { margin:4px 0 0; font-size:21px; font-weight:700; line-height:1.5; }
+.admin-dialog-header>p { margin:12px 0 0; font-size:11px; line-height:1.9; color:#788775; }
+.admin-dialog-header .admin-dialog-close { position:absolute; left:18px; top:20px; display:grid; place-items:center; width:38px; height:38px; border:1px solid #dbe5d6; border-radius:12px; background:#ffffffd9; color:#4d6956; transition:background .15s; }
+.admin-dialog-header .admin-dialog-close:hover { background:#fff; color:#9f5146; }
+.admin-dialog-content { padding:24px; }
+.admin-dialog .admin-modal,.admin-dialog .shared-ad-form { display:grid; gap:18px; width:100%; margin:0; padding:0; border:0; box-shadow:none; background:transparent; }
+.admin-dialog label { display:grid; gap:8px; font-size:12px; font-weight:600; color:#4e6354; }
+.admin-dialog label small { font-size:10px; color:#8a9689; font-weight:400; }
+.admin-dialog input:not([type=checkbox]):not([type=color]),.admin-dialog select,.admin-dialog textarea { width:100%; min-height:46px; padding:12px 14px; border:1px solid #dfe7dc; border-radius:13px; background:#f8faf6; color:#243c2d; font-size:16px; outline:none; transition:border-color .15s,box-shadow .15s; }
+.admin-dialog input:focus,.admin-dialog select:focus,.admin-dialog textarea:focus { border-color:#88ad77; box-shadow:0 0 0 3px #e7f0e0; background:#fff; }
+.admin-dialog input[type=file] { font-size:12px!important; border-style:dashed!important; padding:16px!important; }
+.admin-dialog input::file-selector-button { padding:8px 12px; margin-inline-end:10px; border:0; border-radius:8px; background:#e5efdc; color:#36563d; cursor:pointer; }
+.admin-dialog label:has(input[type=checkbox]) { display:flex; align-items:center; padding:12px 14px; border:1px solid #e1e9dc; border-radius:13px; background:#f7faf2; }
+.admin-dialog input[type=checkbox] { accent-color:#24593f; }
+.admin-dialog input[type=color] { width:100%; min-height:44px; border:1px solid #dfe7dc; border-radius:12px; background:#f8faf6; }
+.admin-dialog .admin-modal-actions { gap:10px; margin-top:6px; padding-top:18px; border-top:1px solid #e7ede3; }
+.admin-dialog .admin-primary,.admin-dialog .market-primary { min-height:46px; padding:12px 22px; font-size:13px; border-radius:13px; background:#174c3c; color:#fff; box-shadow:0 4px 10px #174c3c18; }
+.admin-dialog .admin-secondary { min-height:46px; padding:12px 20px; font-size:12px; border-radius:13px; }
+.admin-dialog .shared-ad-form>p { font-size:11px; line-height:1.9; color:#7c8979; }
+@media(max-width:480px) { .admin-dialog-content { padding:20px 16px; } .admin-dialog-header { padding:20px 16px 16px 64px; } .admin-dialog-header .admin-dialog-close { left:13px; top:18px; width:35px; height:35px; } .admin-dialog-title { gap:10px; } .admin-dialog-title h2 { font-size:19px; } .admin-dialog-icon { width:42px; height:42px; border-radius:13px; } }

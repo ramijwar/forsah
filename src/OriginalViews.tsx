@@ -1,3 +1,4 @@
+import LatestListings from './LatestListings';
 import type { Category } from './categories';
 import { Armchair, ArrowLeft, ChevronLeft, Gavel, PackageCheck, Plus, Search, Sparkles, Truck, UsersRound, Wrench, Zap, Sun, Moon, Monitor, Check, Globe2, Bell, ShieldCheck, Trash2, CircleHelp } from 'lucide-react';
 export type Translate = (ar:string,en:string)=>string;
@@ -9,7 +10,7 @@ const words: Record<string,string> = {
 const translate=(t:Translate,value:string)=>t(value,words[value]||value);
 const categoryIcons:Record<string,typeof Gavel>={Gavel,UsersRound,Truck,Zap,Armchair,PackageCheck,Wrench};
 
-export function OriginalHome({ t, browse, create, categories }: { categories:Category[]; t: Translate; browse: (category?:string,query?:string)=>void; create:(category?:string)=>void }) {
+export function OriginalHome({ t, browse, create, categories, openAd }: { openAd:(id:number)=>void; categories:Category[]; t: Translate; browse: (category?:string,query?:string)=>void; create:(category?:string)=>void }) {
   return (
     <>
       <div className="hero-panel relative mt-1 overflow-hidden rounded-[28px] px-6 py-7 md:px-10 md:py-9">
@@ -26,6 +27,8 @@ export function OriginalHome({ t, browse, create, categories }: { categories:Cat
         <div className="hero-illustration" aria-hidden="true"><span className="hero-sun" /><span className="hero-card"><Sparkles size={25} /><span>{t('فرصتك','Your next')}<br />{t('قريبة','opportunity')}</span></span><span className="hero-plant" /></div>
       </div>
 
+      <LatestListings t={t} open={openAd} browse={()=>browse()}/>
+
       <section className="mt-8 md:mt-10">
         <div className="mb-4 flex items-end justify-between">
           <div><p className="eyebrow">{t('اختَر ما يناسبك','Find what suits you')}</p><h2 className="mt-1 text-[21px] font-bold tracking-tight">{t('تصفّح الخدمات','Browse services')}</h2></div>
@@ -39,7 +42,7 @@ export function OriginalHome({ t, browse, create, categories }: { categories:Cat
               <article key={category.id} className="category-card group" style={{ animationDelay: `${index * 45}ms` }}>
                 <button className="flex w-full items-start gap-3 text-right" onClick={() => browse(category.name)}>
                   <span className="category-icon" style={{ backgroundColor: category.tint, color: category.color }}><Icon size={21} strokeWidth={1.8} /></span>
-                  <span className="min-w-0 flex-1 pt-0.5"><span className="block text-[14px] font-bold leading-5">{t(category.name,category.name_en||category.name)}</span><span className="mt-1 block text-[11px] leading-[1.65] text-[#8a948d]">{translate(t,category.description)}</span></span>
+                  <span className="min-w-0 flex-1 pt-0.5"><span className="block text-[14px] font-bold leading-5">{t(category.name,category.name_en||category.name)}</span><span className="mt-1 block text-[11px] leading-[1.65] text-[#8a948d]">{translate(t,category.description)}</span><span className="category-count" aria-label={t('عدد الإعلانات المنشورة','Published listing count')}>{category.ad_count===undefined?'—':new Intl.NumberFormat(t('ar','en')).format(category.ad_count)} {t('إعلان','listings')}</span></span>
                   <ChevronLeft className="mt-1 shrink-0 text-[#b5bcb6] transition-transform group-hover:-translate-x-1" size={16} />
                 </button>
                 <div className="mt-4 flex flex-wrap gap-2">

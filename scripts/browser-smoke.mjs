@@ -4,7 +4,9 @@ import { createServer } from 'node:http';
 import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
 const root=resolve('dist'),reference=resolve('artifacts/reference-dist');
-const defaultCategories=JSON.parse(readFileSync('backend/default-categories.json','utf8'));
+const defaultCategories=JSON.parse(readFileSync('backend/default-categories.json','utf8')).map((c,i)=>({...c,ad_count:i===0?10:0}));
+const latestFixtures=Array.from({length:10},(_,i)=>({id:100-i,title:`Latest listing ${i+1}`,category:defaultCategories[0].name,images:[500+i]}));
+const checkClose=async dialog=>{const box=await dialog.boundingBox(),close=await dialog.getByRole('button',{name:'إغلاق',exact:true}).boundingBox();assert(close&&close.x-box.x<30&&close.y-box.y<32&&close.x>=box.x,'Dialog close button is not at top left');};
 const server=createServer((req,res)=>{
   let path=new URL(req.url,'http://localhost').pathname;let base=root;
   if(path.startsWith('/__original/')){base=reference;path=path.slice('/__original/'.length);}
@@ -29,12 +31,12 @@ try {
    const context=await browser.newContext({viewport:{width,height:900}});
    const original=await context.newPage();const current=await context.newPage();
    await original.goto(origin+'/__original/',{waitUntil:'networkidle'});
-   await current.route('https://t3lam.site/**',route=>route.fulfill({headers:{'Access-Control-Allow-Origin':'*'},json:{ok:true,data:defaultCategories}}));
+   await current.route('https://t3lam.site/**',route=>route.fulfill({headers:{'Access-Control-Allow-Origin':'*'},json:{ok:true,data:new URL(route.request().url()).searchParams.get('resource')==='services'?defaultCategories:{items:[]}}}));
    await current.goto(origin+'/',{waitUntil:'networkidle'});
    await settle(original);await settle(current);
    const before=await geometry(original),after=await geometry(current);
    for(const selector of Object.keys(before).filter(selector=>selector!=='.bottom-nav')){
-     for(const value of ['x','y','width','height'])assert(Math.abs(before[selector][value]-after[selector][value])<=2,`Original layout mismatch at ${width}px ${selector}.${value}: ${before[selector][value]} vs ${after[selector][value]}`);
+     for(const value of (['header','.hero-panel'].includes(selector)?['x','y','width','height']:['x','width']))assert(Math.abs(before[selector][value]-after[selector][value])<=2,`Original layout mismatch at ${width}px ${selector}.${value}: ${before[selector][value]} vs ${after[selector][value]}`);
      assert(before[selector].radius===after[selector].radius,`Radius mismatch: ${width} ${selector}`);
      assert(before[selector].font===after[selector].font,`Font mismatch: ${width} ${selector}`);
    }
@@ -56,13 +58,14 @@ try {
  writeFileSync('artifacts/visual/layout-comparison.json',JSON.stringify(comparisons,null,2));
  const page=await browser.newPage({viewport:{width:390,height:844}});const errors=[],missing=[];
  page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>{if(r.status()>=400)missing.push(r.url());});
+ const publicImageRequests=[];
  let rejectAdminSave=false;const adminWrites=[];let liveCategories=structuredClone(defaultCategories);let imageUploads=0;
  const account={id:1,name:'Test Member',email:'member@example.test',role:'user',phone:''};
  await page.route('https://t3lam.site/**',route=>{
    if(route.request().method()==='OPTIONS')return route.fulfill({status:204,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,content-type','Access-Control-Allow-Methods':'GET,POST,PATCH,DELETE,OPTIONS'}});
    const url=new URL(route.request().url()),resource=url.searchParams.get('resource'),action=url.searchParams.get('action');let data;
    if(resource==='market'&&action==='image'&&route.request().method()==='POST'){imageUploads++;return route.fulfill({headers:{'Access-Control-Allow-Origin':'*'},json:{ok:true,data:{id:8,images:[1]}}});}
-   if(resource==='image')return route.fulfill({contentType:'image/svg+xml',headers:{'Access-Control-Allow-Origin':'*'},body:'<svg xmlns="http://www.w3.org/2000/svg" width="400" height="280"><rect width="400" height="280" fill="green"/></svg>'});
+   if(resource==='image'){publicImageRequests.push(url.searchParams.get('size'));return route.fulfill({contentType:'image/svg+xml',headers:{'Access-Control-Allow-Origin':'*'},body:'<svg xmlns="http://www.w3.org/2000/svg" width="400" height="280"><rect width="400" height="280" fill="green"/></svg>'});}
    if(resource==='services')data=liveCategories.filter(c=>c.is_active);
    else if(resource==='admin') {
      if(route.request().method()==='POST'||route.request().method()==='PATCH') {
@@ -77,6 +80,7 @@ try {
      else if(action==='ads')data={items:[{id:3,title:'Admin image listing',description:'Details',category:'صيانة',status:'active',created_at:'2026-10-10 00:00:00',owner_name:'Owner',owner_email:'owner@example.test'}]};
      else data={items:[]};
    }
+   else if(resource==='market'&&action==='latest')data={items:latestFixtures};
    else if(resource==='market'&&action==='detail')data={id:3,images:[1,2,3,4]};
    else if(resource==='auth')data=account;
    else if(resource==='chat')data=[{id:4,partner:'Real conversation',title:'Listing',last_message:'Server message'}];
@@ -91,6 +95,14 @@ try {
    await page.getByRole('heading',{name:'تصفّح الخدمات'}).waitFor();
    assert(!(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)),`Horizontal overflow: ${folder}`);
  }
+ assert(await page.locator('.latest-card').count()===10,'Homepage does not show ten listings');
+ assert(await page.locator('.category-count').first().innerText()==='١٠ إعلان','Category count not rendered');
+ await page.locator('.latest-section').scrollIntoViewIfNeeded();
+ await page.getByRole('button',{name:'الإعلان التالي',exact:true}).click();
+ await page.waitForFunction(()=>Math.abs(document.querySelector('.latest-track').scrollLeft)>10);
+ assert(publicImageRequests.every(size=>size==='thumb'),'Homepage loaded full-size images');
+ await page.screenshot({path:'artifacts/visual/home-latest-carousel.png',fullPage:true});
+ await page.evaluate(()=>window.scrollTo(0,0));await page.waitForTimeout(150);
  const initialUrl=page.url(),beforeHero=await page.locator('.hero-panel').boundingBox();
  const bell=page.getByRole('button',{name:'الإشعارات',exact:true});
  await bell.click();await page.getByRole('dialog',{name:'الإشعارات',exact:true}).waitFor();
@@ -130,7 +142,7 @@ try {
  await page.getByRole('button',{name:'إضافة إعلان',exact:true}).waitFor();
  assert(await page.getByRole('button',{name:'إضافة مستخدم',exact:true}).count()===0,'User creation leaked into ads');
  await page.getByRole('button',{name:'إضافة إعلان',exact:true}).click();
- let dialog=page.getByRole('dialog',{name:'إضافة إعلان',exact:true});
+ let dialog=page.getByRole('dialog',{name:'إضافة إعلان',exact:true});await checkClose(dialog);await page.screenshot({path:'artifacts/visual/admin-create-ad.png'});
  await dialog.getByLabel('العنوان',{exact:true}).fill('New admin listing');await dialog.getByLabel('التصنيف',{exact:true}).selectOption(defaultCategories[0].name);await dialog.getByLabel('الوصف وتفاصيل الخدمة والسعر',{exact:true}).fill('Shared listing form');
  await dialog.locator('input[type=file]').setInputFiles({name:'test.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGP4z8AARAwQCgAf7gP9i18U1AAAAABJRU5ErkJggg==','base64')});
  await dialog.getByRole('button',{name:'حفظ للمراجعة',exact:true}).click();await dialog.waitFor({state:'hidden'});
@@ -138,7 +150,7 @@ try {
  assert(imageUploads===1,'Admin photo did not reach upload endpoint');
  await page.locator('.admin-mobile-nav').getByRole('button',{name:'إدارة المستخدمين',exact:true}).click();
  assert(await page.getByRole('button',{name:'إضافة إعلان',exact:true}).count()===0,'Ad creation leaked into users');
- await page.getByRole('button',{name:'إضافة مستخدم',exact:true}).click();dialog=page.getByRole('dialog',{name:'إضافة مستخدم',exact:true});
+ await page.getByRole('button',{name:'إضافة مستخدم',exact:true}).click();dialog=page.getByRole('dialog',{name:'إضافة مستخدم',exact:true});await checkClose(dialog);await page.screenshot({path:'artifacts/visual/admin-create-user.png'});
  await dialog.getByLabel('الاسم',{exact:true}).fill('New member');await dialog.getByLabel('البريد الإلكتروني',{exact:true}).fill('new@example.test');await dialog.getByLabel('كلمة المرور',{exact:true}).fill('Strong-password-123');
  await dialog.getByRole('button',{name:'إنشاء',exact:true}).click();await dialog.waitFor({state:'hidden'});
  assert(adminWrites.some(w=>w.action==='user'&&w.body.name==='New member'),'Create user did not call backend');
@@ -150,7 +162,7 @@ try {
    await dialog.locator('img').nth(3).waitFor();
    const box=await dialog.boundingBox();assert(box.y>=0&&box.y+box.height<=viewport.height&&box.width<=viewport.width,'Editor exceeds viewport');
    await dialog.hover();await page.mouse.wheel(0,1800);await page.waitForTimeout(300);
-   assert(await dialog.evaluate(e=>e.scrollTop>0),'Image editor does not scroll');
+   assert(await dialog.evaluate(e=>e.scrollTop>0),'Image editor does not scroll');await checkClose(dialog);
    await dialog.getByLabel('الوصف',{exact:true}).fill('Updated details');
    rejectAdminSave=true;await dialog.getByRole('button',{name:'حفظ التعديلات',exact:true}).click();await dialog.getByRole('alert').waitFor();
    assert(await dialog.getByLabel('الوصف',{exact:true}).inputValue()==='Updated details','Failed save lost form');
@@ -159,7 +171,7 @@ try {
  }
  await page.setViewportSize({width:390,height:844});
  await page.locator('.admin-mobile-nav').getByRole('button',{name:'إدارة الأقسام',exact:true}).click();
- await page.getByRole('button',{name:'إضافة قسم',exact:true}).click();dialog=page.getByRole('dialog',{name:'إضافة قسم',exact:true});
+ await page.getByRole('button',{name:'إضافة قسم',exact:true}).click();dialog=page.getByRole('dialog',{name:'إضافة قسم',exact:true});await checkClose(dialog);await page.screenshot({path:'artifacts/visual/admin-create-category.png'});
  await dialog.getByLabel('اسم القسم',{exact:true}).fill('قسم جديد');await dialog.getByLabel('الاسم بالإنجليزية',{exact:true}).fill('New category');
  await dialog.getByRole('button',{name:'حفظ القسم',exact:true}).click();await dialog.waitFor({state:'hidden'});
  await page.getByRole('button',{name:'العودة للتطبيق',exact:true}).click();await page.getByText('قسم جديد',{exact:true}).waitFor();

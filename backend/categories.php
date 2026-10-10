@@ -2,6 +2,7 @@
 declare(strict_types=1);
 function categorySchema(PDO $pdo): void {
     $pdo->exec(<<<'SQL'
+CREATE INDEX IF NOT EXISTS ads_category_status ON ads(category,status);
 CREATE TABLE IF NOT EXISTS app_state (key TEXT PRIMARY KEY,value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS categories (
  id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, name_en TEXT NOT NULL DEFAULT '',
@@ -25,8 +26,9 @@ SQL);
     }catch(Throwable $e){$pdo->exec('ROLLBACK');throw $e;}
 }
 function categoriesData(PDO $pdo,bool $all=false): array {
-    $rows=$pdo->query('SELECT c.*,(SELECT COUNT(*) FROM ads a WHERE a.category=c.name) AS ad_count FROM categories c '.($all?'':'WHERE c.is_active=1 ').'ORDER BY c.sort_order,c.id')->fetchAll();
-    foreach($rows as &$r){$r['id']=(int)$r['id'];$r['title']=$r['name'];$r['sort_order']=(int)$r['sort_order'];$r['is_active']=(bool)$r['is_active'];$r['ad_count']=(int)$r['ad_count'];$r['subcategories']=json_decode($r['subcategories'],true);if(!$all)unset($r['ad_count']);}unset($r);return $rows;
+    $visibility=$all?'':" AND a.status='active' AND (u.is_banned IS NULL OR u.is_banned=0)";
+    $rows=$pdo->query("SELECT c.*,(SELECT COUNT(*) FROM ads a LEFT JOIN users u ON u.id=a.user_id WHERE a.category=c.name$visibility) AS ad_count FROM categories c ".($all?'':'WHERE c.is_active=1 ').'ORDER BY c.sort_order,c.id')->fetchAll();
+    foreach($rows as &$r){$r['id']=(int)$r['id'];$r['title']=$r['name'];$r['sort_order']=(int)$r['sort_order'];$r['is_active']=(bool)$r['is_active'];$r['ad_count']=(int)$r['ad_count'];$r['subcategories']=json_decode($r['subcategories'],true);}unset($r);return $rows;
 }
 function validCategory(PDO $pdo,string $name,?string $previous=null): void {
     if($name===$previous)return;

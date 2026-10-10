@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, LayoutGrid } from 'lucide-react';
 import { apiRequest } from './api';
 import type { Category } from './categories';
 import Overlay from './Overlay';
@@ -20,8 +20,7 @@ export default function CategoryManager({token,canManage}:{token:string;canManag
     {error&&!editor&&!removing&&<p className="admin-alert" role="alert">{error}<button onClick={()=>void load()}>إعادة المحاولة</button></p>}
     {loading?<p role="status">جار تحميل الأقسام…</p>:<div className="admin-category-grid">{items.map(item=><article className="admin-panel" key={item.id}><h3>{item.name}</h3><p>{item.name_en}</p><p>{item.description}</p><small>{item.is_active?'ظاهر في التطبيق':'مخفي من اختيار الأقسام'} · الترتيب: {item.sort_order} · الإعلانات: {item.ad_count||0}</small><div className="admin-create-actions">{canManage&&<><button className="admin-secondary" onClick={()=>{setError('');setEditor(item);setSubtext(item.subcategories.join('\n'));}}><Pencil size={16}/>تعديل {item.name}</button><button className="admin-secondary" onClick={()=>{setError('');setRemoving(item);setReplacement('');}}><Trash2 size={16}/>حذف {item.name}</button></>}</div></article>)}</div>}
     {!loading&&!items.length&&<p>لا توجد أقسام. أضف أول قسم لإتاحته في التطبيق.</p>}
-    {editor&&<Overlay label={editor.id?'تعديل القسم':'إضافة قسم'} panelClassName="admin-editor-panel" close={()=>{if(!busy)setEditor(null);}}><form className="admin-modal" onSubmit={e=>{e.preventDefault();void save(editor.id?'PATCH':'POST',{...editor,subcategories:subtext.split('\n').map(s=>s.trim()).filter(Boolean)},editor.id);}}>
-      <h2>{editor.id?'تعديل القسم':'إضافة قسم'}</h2>
+    {editor&&<Overlay label={editor.id?'تعديل القسم':'إضافة قسم'} busy={busy} chrome={{icon:<LayoutGrid size={23}/>,subtitle:"نظّم أقسام التطبيق واختر هويتها وترتيب ظهورها للزوار."}} close={()=>{if(!busy)setEditor(null);}}><form className="admin-modal" onSubmit={e=>{e.preventDefault();void save(editor.id?'PATCH':'POST',{...editor,subcategories:subtext.split('\n').map(s=>s.trim()).filter(Boolean)},editor.id);}}>
       <label>اسم القسم<input required maxLength={80} value={editor.name} onChange={e=>setEditor({...editor,name:e.target.value})}/></label>
       <label>الاسم بالإنجليزية<input maxLength={80} value={editor.name_en} onChange={e=>setEditor({...editor,name_en:e.target.value})}/></label>
       <label>وصف القسم<textarea aria-label="وصف القسم" maxLength={250} value={editor.description} onChange={e=>setEditor({...editor,description:e.target.value})}/></label>
@@ -34,6 +33,6 @@ export default function CategoryManager({token,canManage}:{token:string;canManag
       {error&&<p role="alert" className="admin-alert">{error}</p>}
       <div className="admin-modal-actions"><button className="admin-primary" disabled={busy}>حفظ القسم</button><button type="button" className="admin-secondary" disabled={busy} onClick={()=>setEditor(null)}>إلغاء</button></div>
     </form></Overlay>}
-    {removing&&<Overlay label="حذف القسم" close={()=>{if(!busy)setRemoving(null);}}><h2>حذف {removing.name}؟</h2><p>لن تُحذف الإعلانات. إذا كان القسم مستخدمًا، يجب نقلها إلى قسم نشط آخر.</p><label>نقل الإعلانات إلى<select value={replacement} onChange={e=>setReplacement(e.target.value)}><option value="">اختر القسم البديل</option>{items.filter(c=>c.id!==removing.id&&c.is_active).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>{error&&<p role="alert" className="admin-alert">{error}</p>}<div className="admin-modal-actions"><button className="admin-primary" disabled={busy||!!removing.ad_count&&!replacement} onClick={()=>void save('DELETE',{replacement_id:replacement?Number(replacement):null},removing.id)}>تأكيد الحذف</button><button className="admin-secondary" disabled={busy} onClick={()=>setRemoving(null)}>إلغاء</button></div></Overlay>}
+    {removing&&<Overlay label="حذف القسم" busy={busy} chrome={{icon:<Trash2 size={23}/>,subtitle:"نقل آمن للإعلانات قبل إزالة القسم."}} close={()=>{if(!busy)setRemoving(null);}}><h2>حذف {removing.name}؟</h2><p>لن تُحذف الإعلانات. إذا كان القسم مستخدمًا، يجب نقلها إلى قسم نشط آخر.</p><label>نقل الإعلانات إلى<select value={replacement} onChange={e=>setReplacement(e.target.value)}><option value="">اختر القسم البديل</option>{items.filter(c=>c.id!==removing.id&&c.is_active).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>{error&&<p role="alert" className="admin-alert">{error}</p>}<div className="admin-modal-actions"><button className="admin-primary" disabled={busy||!!removing.ad_count&&!replacement} onClick={()=>void save('DELETE',{replacement_id:replacement?Number(replacement):null},removing.id)}>تأكيد الحذف</button><button className="admin-secondary" disabled={busy} onClick={()=>setRemoving(null)}>إلغاء</button></div></Overlay>}
   </section>;
 }
