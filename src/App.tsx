@@ -199,7 +199,8 @@ export default function App() {
   });
   const requireLogin = !user && !['market','search','ad','account','settings','admin','messages','mine','new'].includes(view);
   const dark = theme==='dark'||(theme==='system'&&systemDark);
-  if(view==='admin')return <><button className="market-admin-back" onClick={()=>go('/')}>{t('العودة للتطبيق','Back to app')}</button><AdminDashboard memberToken={user?.role!=='user'?token:''}/></>;
+  const endAdminSession=useCallback(()=>{void saveToken('');setUser(null);if(native)void SessionVault.clear().then(()=>setSavedBiometric(false));navigate('/account');},[saveToken,navigate]);
+  if(view==='admin')return <><button className="market-admin-back" onClick={()=>go('/')}>{t('العودة للتطبيق','Back to app')}</button><AdminDashboard memberToken={user?.role!=='user'?token:''} onSessionEnded={endAdminSession}/></>;
   return <div className={`app-shell ${dark?'dark-theme':''} ${style==='classic'?'classic-style':''}`} dir={language==='ar'?'rtl':'ltr'}>
     <div className="page-wrap original-page-wrap">
     <div ref={headerArea}>

@@ -1,5 +1,5 @@
 import ModerationImages from './ModerationImages';
-import { API_BASE } from './api';
+import { ApiError, API_BASE } from './api';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import {
@@ -38,7 +38,7 @@ async function request<T>(token: string, action: string, options: { method?: str
   });
   let result: ApiEnvelope<T>;
   try { result = await response.json() as ApiEnvelope<T>; } catch { throw new Error('استجابة الخادم غير صالحة.'); }
-  if (!response.ok || !result.ok || result.data === undefined) throw new Error(result.error || 'تعذر إتمام الطلب.');
+  if (!response.ok || !result.ok || result.data === undefined) throw new ApiError(result.error || 'تعذر إتمام الطلب.',response.status);
   return result.data;
 }
 
@@ -49,7 +49,7 @@ function dateLabel(value: string) {
 function roleLabel(role: Role) { return role === 'super_admin' ? 'مدير فائق' : role === 'admin' ? 'مدير' : role === 'support' ? 'دعم فني' : 'مستخدم'; }
 function statusLabel(status: string) { return ({ pending: 'قيد المراجعة', active: 'نشط', rejected: 'مرفوض', blocked: 'محظور', open: 'مفتوحة', in_progress: 'قيد المعالجة', resolved: 'مغلقة' } as Record<string, string>)[status] ?? status; }
 
-export default function AdminDashboard({ memberToken = '' }: { memberToken?: string }) {
+export default function AdminDashboard({ memberToken = '', onSessionEnded }: { memberToken?: string; onSessionEnded?: () => void }) {
   const [token, setToken] = useState(() => { try { return memberToken || sessionStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; } });
   const [profile, setProfile] = useState<AdminProfile | null>(null);
   const [section, setSection] = useState<Section>('overview');
@@ -73,7 +73,9 @@ export default function AdminDashboard({ memberToken = '' }: { memberToken?: str
     if (token && API_BASE) { try { await request(token, 'logout', { method: 'POST' }); } catch { /* local session still removed */ } }
     try { sessionStorage.removeItem(TOKEN_KEY); } catch { /* storage may be unavailable */ }
     setToken(''); setProfile(null); setSelectedTicket(null);
-  }, [token]);
+    if(token===memberToken) onSessionEnded?.();
+  }, [token, memberToken, onSessionEnded]);
+  useEffect(()=>{if(memberToken)setToken(memberToken);},[memberToken]);
 
   const load = useCallback(async (target: Section = section, activeToken = token) => {
     if (!activeToken) return;
@@ -95,7 +97,7 @@ export default function AdminDashboard({ memberToken = '' }: { memberToken?: str
       }
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : 'حدث خطأ غير متوقع.';
-      if (/انتهت|غير صالح|غير مخول|غير مصرّح|مصادقة/i.test(message)) { await logout(); }
+      if (caught instanceof ApiError && caught.status===401) { await logout(); }
       else setError(message);
     } finally { setLoading(false); }
   }, [section, token, logout, selectedTicket]);
@@ -103,7 +105,7 @@ export default function AdminDashboard({ memberToken = '' }: { memberToken?: str
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
-    request<AdminProfile>(token, 'me').then((me) => { if (!cancelled) setProfile(me); }).catch(() => { if (!cancelled) void logout(); });
+    request<AdminProfile>(token, 'me').then((me) => { if (!cancelled) setProfile(me); }).catch((caught) => { if (!cancelled) { if(caught instanceof ApiError && caught.status===401) void logout(); else setError(caught instanceof Error?caught.message:'تعذر الاتصال بالخادم'); } });
     return () => { cancelled = true; };
   }, [token, logout]);
   useEffect(() => { if (profile) void load(section); }, [profile, section]);

@@ -28,7 +28,13 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS messages_conversation ON messages(conversation_id,id);
 SQL);
     $columns=$pdo->query('PRAGMA table_info(ad_images)')->fetchAll(PDO::FETCH_COLUMN,1);
-    if(!in_array('thumbnail',$columns,true)) $pdo->exec('ALTER TABLE ad_images ADD COLUMN thumbnail BLOB');
+    if(!in_array('thumbnail',$columns,true)) {
+        try { $pdo->exec('ALTER TABLE ad_images ADD COLUMN thumbnail BLOB'); }
+        catch(PDOException $e) {
+            // Another request may have finished this additive migration while we waited.
+            if(!in_array('thumbnail',$pdo->query('PRAGMA table_info(ad_images)')->fetchAll(PDO::FETCH_COLUMN,1),true)) throw $e;
+        }
+    }
 }
 function imageThumbnail(string $content): string {
     $source=@imagecreatefromstring($content);
