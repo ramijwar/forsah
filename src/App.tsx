@@ -9,7 +9,8 @@ import './market.css';
 import { OriginalHome, OriginalSettings, type FeedPreferences } from './OriginalViews';
 import HeaderPopover from './HeaderPopover';
 import Overlay from './Overlay';
-import { compressAdImage } from './imageCompression';
+import AdEditor from './AdEditor';
+import { useCategories } from './categories';
 
 type User = { id: number; name: string; email: string; phone: string | null; role: string };
 type Session = { token: string; user: User };
@@ -19,10 +20,6 @@ type Chat = { id: number; title: string | null; partner: string; last_message: s
 type Message = { id: number; sender_id?: number; sender_name?: string; sender_type?: string; content: string; created_at: string };
 type Ticket = { id: number; subject: string; status: string; messages?: Message[] };
 type Translate = (ar: string, en: string) => string;
-const categories = [
-  ['الحراج الشعبي','Marketplace'], ['سوق العمالة','Workers'], ['المواصلات والنقل الداخلي','Transport'],
-  ['طوارئ السيارات','Roadside assistance'], ['المفروشات والموبيليا','Furniture'], ['الخدمات اللوجستية','Logistics'], ['خدمات الصيانة المنزلية','Home maintenance'],
-];
 const stored = <T,>(key: string, fallback: T): T => { try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback; } catch { return fallback; } };
 const persist = (key: string, value: unknown) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* private browsing/storage quota */ } };
 function ImageView({ id, token, title, thumbnail = false }: { id: number; token: string; title: string; thumbnail?: boolean }) {
@@ -52,20 +49,9 @@ function AdGallery({ images, token, title, remove, busy, t }: { images: number[]
     {remove&&<button type="button" disabled={busy} onClick={()=>remove(images[index])}>{t('حذف الصورة المحددة','Delete selected photo')}</button>}
   </section>;
 }
-function AdEditor({ ad, busy, t, submit, initialCategory }: { initialCategory?: string; ad?: Ad; busy: boolean; t: Translate; submit: (body: Record<string, string>) => void }) {
-  const [title, setTitle] = useState(ad?.title || '');
-  const [description, setDescription] = useState(ad?.description || '');
-  const [category, setCategory] = useState(ad?.category || initialCategory || categories[0][0]);
-  return <form onSubmit={e => { e.preventDefault(); submit({ title, description, category }); }} className="market-form">
-    <label>{t('العنوان','Title')}<input required maxLength={120} value={title} onChange={e => setTitle(e.target.value)} /></label>
-    <label>{t('التصنيف','Category')}<select value={category} onChange={e => setCategory(e.target.value)}>{categories.map(([ar,en]) => <option key={ar} value={ar}>{t(ar,en)}</option>)}</select></label>
-    <label>{t('الوصف وتفاصيل الخدمة والسعر','Description, service details and price')}<textarea required maxLength={3000} rows={5} value={description} onChange={e => setDescription(e.target.value)} /></label>
-    <p>{t('تخضع الإعلانات والتعديلات والصور للمراجعة قبل ظهورها للجمهور. يمكنك إضافة حتى 4 صور بعد حفظ الإعلان.','Listings, edits and images require moderation before publication. Add up to 4 images after saving.')}</p>
-    <button disabled={busy} className="market-primary">{t('حفظ للمراجعة','Save for review')}</button>
-  </form>;
-}
-
 export default function App() {
+  const {categories:serviceCategories,categoryError,refreshCategories}=useCategories();
+  const categories=serviceCategories.map(c=>[c.name,c.name_en||c.name]);
   const navigate = useNavigate(); const location = useLocation();
   const parts = location.pathname.split('/').filter(Boolean); const view = (parts[0]==='ads'?'mine':parts[0]==='home'?'market':parts[0]) || 'market'; const id = Number(parts[1]);
   const [language, setLanguage] = useState<'ar'|'en'>(() => stored('forsah-language','ar'));
@@ -88,7 +74,7 @@ export default function App() {
   const [phone, setPhone] = useState(''); const [currentPassword, setCurrentPassword] = useState('');
   const [biometric, setBiometric] = useState(false); const [savedBiometric, setSavedBiometric] = useState(false);
   const [popover,setPopover]=useState<'notices'|'messages'|null>(null);
-  const [newOpen,setNewOpen]=useState(false);const [authOpen,setAuthOpen]=useState(false);const [draftCategory,setDraftCategory]=useState(categories[0][0]);
+  const [newOpen,setNewOpen]=useState(false);const [authOpen,setAuthOpen]=useState(false);const [draftCategory,setDraftCategory]=useState((categories[0]?.[0]||''));
   const [feedPreferences,setFeedPreferences]=useState<FeedPreferences>(()=>stored('forsah-feed-preferences',{ads:true,chat:true,support:true}));
   const [filtersOpen,setFiltersOpen]=useState(false);const [recentOpen,setRecentOpen]=useState(false);
   const headerArea=useRef<HTMLDivElement>(null);const popupTrigger=useRef<HTMLButtonElement|null>(null);
@@ -129,10 +115,10 @@ export default function App() {
   },[]);
   useEffect(() => {
     if(!native)return;
-    const back=NativeApp.addListener('backButton',()=>{ if(newOpen){setNewOpen(false);return;}if(authOpen){setAuthOpen(false);return;}if(popover){setPopover(null);return;}if(location.pathname!=='/') navigate('/'); else void NativeApp.exitApp(); });
+    const back=NativeApp.addListener('backButton',()=>{ if(newOpen){if(!busy)setNewOpen(false);return;}if(authOpen){setAuthOpen(false);return;}if(popover){setPopover(null);return;}if(location.pathname!=='/') navigate('/'); else void NativeApp.exitApp(); });
     const state=NativeApp.addListener('appStateChange',({isActive})=>{if(!isActive && savedBiometric) { saveToken('');setUser(null);setAd(null);setMessages([]);setTicket(null);navigate('/account'); }});
     return()=>{void back.then(h=>h.remove());void state.then(h=>h.remove());};
-  },[location.pathname,navigate,savedBiometric,saveToken,newOpen,authOpen,popover]);
+  },[location.pathname,navigate,savedBiometric,saveToken,newOpen,authOpen,popover,busy]);
   useEffect(() => {
     const controller=new AbortController();setReady(false);setUser(null);setFavorites([]);
     if(!token){setReady(true);return;}
@@ -185,9 +171,9 @@ export default function App() {
       if(!controller.signal.aborted)timer=setTimeout(poll,3000);
     };void poll();return()=>{controller.abort();clearTimeout(timer);};
   },[view,id,user,api]);
-  const go=(path:string)=>{setPopover(null);setAuthOpen(false);if(path==='/new'){setDraftCategory(categories[0][0]);setNewOpen(true);return;}setPage(1);setQuery('');setSearch('');setCategory('');navigate(path);};
+  const go=(path:string)=>{setPopover(null);setAuthOpen(false);if(path==='/new'){setDraftCategory((categories[0]?.[0]||''));setNewOpen(true);return;}setPage(1);setQuery('');setSearch('');setCategory('');navigate(path);};
   const browse=(selected='',term='')=>{routeScroll.current['/search']=0;setPopover(null);setPage(1);setCategory(selected);setQuery(term);setSearch(term);navigate('/search');};
-  const create=(selected=categories[0][0])=>{setPopover(null);setDraftCategory(selected);setNewOpen(true);};
+  const create=(selected=(categories[0]?.[0]||''))=>{setPopover(null);setDraftCategory(selected);setNewOpen(true);};
   useEffect(()=>{if(view!=='search')return;const timer=setTimeout(()=>{setPage(1);setQuery(search.trim());},300);return()=>clearTimeout(timer);},[view,search]);
   const submitSearch=(e:FormEvent)=>{e.preventDefault();setPage(1);setQuery(search.trim());if(search.trim()){const next=[search.trim(),...history.filter(v=>v!==search.trim())].slice(0,10);setHistory(next);persist('forsah-search-history',next);}};
   const auth=()=>run(async()=>{
@@ -203,7 +189,7 @@ export default function App() {
   if(view==='admin')return <><button className="market-admin-back" onClick={()=>go('/')}>{t('العودة للتطبيق','Back to app')}</button><AdminDashboard memberToken={user?.role!=='user'?token:''} onSessionEnded={endAdminSession}/></>;
   return <div className={`app-shell ${dark?'dark-theme':''} ${style==='classic'?'classic-style':''}`} dir={language==='ar'?'rtl':'ltr'}>
     <div className="page-wrap original-page-wrap">
-    <div ref={headerArea}>
+    <div ref={headerArea} className="app-header-sticky">
       <header className="flex items-center justify-between pt-6 pb-5 md:pt-8">
         <button className="flex items-center gap-3 text-right" onClick={()=>go('/')} aria-label={t('العودة إلى الرئيسية','Go home')}><span className="brand-mark"><Sparkles size={20} strokeWidth={2.3}/></span><span><span className="block text-[22px] font-bold leading-none tracking-tight text-[#174c3c] dark-text">{t('فرصة','Forsah')}</span><span className="mt-1 block text-[11px] font-medium text-[#86918a]">{t('كل شيء يبدأ بفرصة','Everything starts with an opportunity')}</span></span></button>
         <div className="flex items-center gap-2">
@@ -215,11 +201,12 @@ export default function App() {
       {popover&&<HeaderPopover kind={popover} userId={user?.id} api={api} t={t} preferences={feedPreferences} close={()=>{setPopover(null);popupTrigger.current?.focus({preventScroll:true});}} go={go}/>}
     </div>
     <main className="main-content">
+      {categoryError&&<p className="market-error" role="alert">{t('تعذر تحديث الأقسام؛ تحقق من الاتصال.','Categories could not be refreshed. Check your connection.')}<button onClick={()=>void refreshCategories()}>{t('إعادة المحاولة','Retry')}</button></p>}
       {error&&!newOpen&&!authOpen&&view!=='new'&&<div role="alert" className="market-error">{error}<button onClick={()=>{setError('');setRevision(v=>v+1);}}>{t('إعادة المحاولة','Retry')}</button></div>}
       {view!=='market'&&(!ready||loading)&&<div className="inline-loading" role="status">{t('جار التحميل…','Loading…')}</div>}
       {requireLogin&&<section className="market-panel"><h1>{t('سجّل دخولك أولًا','Please sign in')}</h1><p>{t('لحماية بياناتك، تتطلب هذه الخدمة حسابًا.','An account is required to protect your data.')}</p><button className="market-primary" onClick={()=>go('/account')}>{t('الدخول أو إنشاء حساب','Sign in or register')}</button></section>}
       {!requireLogin&&<>
-        {view==='market'&&<OriginalHome t={t} browse={browse} create={create}/>}
+        {view==='market'&&<OriginalHome categories={serviceCategories} t={t} browse={browse} create={create}/>}
         {['search','mine','favorites'].includes(view)&&<>
           <div className="mb-5 mt-5 flex items-end justify-between"><div><p className="eyebrow">{view==='mine'?t('كل ما نشرته','Your listings'):t('اكتشف القريب منك','Explore your community')}</p><h1 className="mt-1 text-[26px] font-bold">{view==='mine'?t('إعلاناتي','My listings'):view==='favorites'?t('المفضلة','Favorites'):t('البحث','Search')}</h1></div>{view==='mine'&&<button className="small-primary" onClick={()=>create()}><Plus size={16}/>{t('إعلان جديد','New listing')}</button>}</div>
           {view!=='mine'&&<><form className="search-field" onSubmit={submitSearch}><Search size={19}/><input aria-label={t('البحث','Search')} value={search} maxLength={120} onChange={e=>setSearch(e.target.value)} placeholder={t('وش تدور عليه؟','What are you looking for?')}/><button type="button" aria-label={t('تصفية البحث','Filter search')} aria-expanded={filtersOpen} onClick={()=>setFiltersOpen(v=>!v)}><SlidersHorizontal size={18}/></button></form>
@@ -236,8 +223,8 @@ export default function App() {
         </>}
         {view==='ad'&&ad&&<section className="market-panel"><span className="market-badge">{status(ad.status)}</span><h1>{ad.title}</h1><p className="market-description">{ad.description}</p><p>{ad.owner_name}</p>
           <AdGallery key={ad.id} images={ad.images} token={token} title={ad.title} busy={busy} t={t} remove={user?.id===ad.user_id ? image=>void run(async()=>{setAd(await api<Ad>('market','image-delete',{method:'DELETE'},{id:String(ad.id),image_id:String(image)}));}) : undefined}/>
-          {user?.id===ad.user_id?<><h2>{t('إدارة إعلانك','Manage your listing')}</h2><AdEditor key={`${ad.id}-${ad.status}`} ad={ad} t={t} busy={busy} submit={body=>void run(async()=>{setAd(await api<Ad>('market','edit',{method:'PATCH',body:JSON.stringify(body)},{id:String(ad.id)}));setNotice(t('حُفظ الإعلان للمراجعة','Listing saved for review'));})}/>
-            <label className="market-upload">{t('إضافة صور (حتى 4) — تُضغط تلقائيًا قبل الرفع','Add photos (up to 4) — automatically compressed before upload')}<input type="file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy||ad.images.length>=4||ad.status==='blocked'} onChange={e=>{const files=Array.from(e.target.files||[]);e.target.value='';if(files.length)void run(async()=>{if(files.length+ad.images.length>4)throw new Error(t('الحد الأقصى 4 صور لكل إعلان','Maximum 4 photos per listing'));for(const file of files){const compressed=await compressAdImage(file);const data=new FormData();data.append('image',compressed);setAd(await api<Ad>('market','image',{method:'POST',body:data},{id:String(ad.id)}));}});}}/></label>
+          {user?.id===ad.user_id?<><h2>{t('إدارة إعلانك','Manage your listing')}</h2><AdEditor key={`${ad.id}-${ad.status}`} ad={ad} categories={serviceCategories} token={token} t={t} busy={busy} onSave={body=>api<Ad>('market','edit',{method:'PATCH',body:JSON.stringify(body)},{id:String(ad.id)})} onComplete={()=>{void api<Ad>('market','detail',{}, {id:String(ad.id)}).then(setAd).catch(e=>setError(e.message));setNotice(t('حُفظ الإعلان للمراجعة','Listing saved for review'));}}/>
+
             <button className="market-danger" disabled={busy} onClick={()=>{if(confirm(t('حذف الإعلان نهائيًا؟','Permanently delete this listing?')))void run(async()=>{await api('market','delete',{method:'DELETE'},{id:String(ad.id)});go('/mine');});}}>{t('حذف الإعلان','Delete listing')}</button></>:<>
             <button className="market-primary" disabled={busy||!ad.user_id} onClick={()=>{if(!user){go('/account');return;}void run(async()=>{const chat=await api<{id:number}>('chat','start',{method:'POST'},{id:String(ad.id)});navigate(`/chat/${chat.id}`);});}}>{t('مراسلة صاحب الإعلان','Message the seller')}</button>
             {!ad.user_id&&<p>{t('الإعلان القديم غير مرتبط بحساب، لذلك لا يمكن مراسلة صاحبه.','This legacy listing has no linked account; messaging is unavailable.')}</p>}
@@ -264,7 +251,7 @@ export default function App() {
           </div>
           {recentOpen&&<div className="support-contact-card"><h2 className="font-bold">{t('عمليات البحث الأخيرة','Recent searches')}</h2>{history.length?history.map(q=><button key={q} className="filter-chip" onClick={()=>browse('',q)}>{q}</button>):<p className="text-xs">{t('لا توجد عمليات بحث محفوظة على هذا الجهاز.','No searches saved on this device.')}</p>}<button className="text-xs text-[#47705c]" onClick={()=>{setHistory([]);persist('forsah-search-history',[]);}}>{t('مسح السجل','Clear history')}</button></div>}
           {user&&<details className="support-contact-card"><summary className="text-sm font-bold">{t('بيانات الحساب وكلمة المرور','Profile and password')}</summary><p>{user.email}</p><form className="market-form" onSubmit={e=>{e.preventDefault();void run(async()=>{setUser(await api<User>('auth','profile',{method:'PATCH',body:JSON.stringify({name,phone})}));setNotice(t('تم حفظ بياناتك','Profile saved'));});}}><label>{t('الاسم','Name')}<input required maxLength={100} value={name} onChange={e=>setName(e.target.value)}/></label><label>{t('الهاتف (لا يُعرض علنًا)','Phone (not displayed publicly)')}<input type="tel" maxLength={30} value={phone} onChange={e=>setPhone(e.target.value)}/></label><button disabled={busy}>{t('حفظ بيانات الحساب','Save profile')}</button></form>
-          <details><summary>{t('تغيير كلمة المرور','Change password')}</summary><form className="market-form" onSubmit={e=>{e.preventDefault();void run(async()=>{await api('auth','password',{method:'POST',body:JSON.stringify({current_password:currentPassword,password})});if(native)await SessionVault.clear();setSavedBiometric(false);saveToken('');setUser(null);setPassword('');setCurrentPassword('');setNotice(t('تم تغيير كلمة المرور وإبطال جميع الجلسات. سجل الدخول مجددًا.','Password changed. All sessions revoked. Sign in again.'));});}}><input required type="password" aria-label={t('كلمة المرور الحالية','Current password')} autoComplete="current-password" value={currentPassword} onChange={e=>setCurrentPassword(e.target.value)}/><input required type="password" aria-label={t('كلمة المرور الجديدة','New password')} autoComplete="new-password" minLength={12} maxLength={200} value={password} onChange={e=>setPassword(e.target.value)}/><button disabled={busy}>{t('تغيير كلمة المرور','Change password')}</button></form></details>
+          <details><summary>{t('تغيير كلمة المرور','Change password')}</summary><form className="market-form" onSubmit={e=>{e.preventDefault();void run(async()=>{await api('auth','password',{method:'POST',body:JSON.stringify({current_password:currentPassword,password})});if(native)await SessionVault.clear();setSavedBiometric(false);saveToken('');setUser(null);setPassword('');setCurrentPassword('');setNotice(t('تم تغيير كلمة المرور وإبطال جميع الجلسات. سجل الدخول مجددًا.','Password changed. All sessions revoked. Sign in again.'));});}}><input required type="password" aria-label={t('كلمة المرور الحالية','Current password')} autoComplete="current-password" value={currentPassword} onChange={e=>setCurrentPassword(e.target.value)}/><input required type="password" aria-label={t('كلمة المرور الجديدة','New password')} autoComplete="new-password" minLength={6} maxLength={200} value={password} onChange={e=>setPassword(e.target.value)}/><button disabled={busy}>{t('تغيير كلمة المرور','Change password')}</button></form></details>
 
         </details>}
           <p className="copyright">{t('فرصة','Forsah')} <span>·</span> {t('تم التطوير بواسطة','Developed by')} <strong>Engineer Abdulrazzak Saleh Al-Ja'ili</strong></p>
@@ -283,12 +270,12 @@ export default function App() {
       {path:'/search',icon:Search,label:t('البحث','Search'),active:view==='search'},
       {path:'/account',icon:UserRound,label:t('حسابي','Account'),active:['account','favorites','settings'].includes(view)},
     ].map(({path,icon:Icon,label,active})=><button key={path} className={`nav-item ${active?'nav-item-active':''}`} aria-current={active?'page':undefined} onClick={()=>go(path)}><span className="nav-icon-wrap"><Icon size={20} strokeWidth={active?2.3:1.8}/></span><span>{label}</span></button>)}</nav>
-    {(newOpen||view==='new')&&<Overlay label={t('أضف إعلانك','Create a listing')} close={()=>{setNewOpen(false);if(view==='new')go('/');}}><div className="flex items-start justify-between"><div><p className="eyebrow">{t('وصل خدمتك للي يحتاجها','Reach people who need your service')}</p><h2 className="mt-1 text-xl font-bold">{t('أضف إعلانك','Create a listing')}</h2></div><button type="button" className="icon-button" aria-label={t('إغلاق','Close')} onClick={()=>{setNewOpen(false);if(view==='new')go('/');}}><X size={19}/></button></div>
-      {user?<AdEditor t={t} busy={busy} initialCategory={draftCategory} submit={body=>void run(async()=>{const result=await api<Ad>('market','create',{method:'POST',body:JSON.stringify(body)});setNewOpen(false);navigate(`/ad/${result.id}`);})}/>:<><p className="text-sm text-[#849088]">{t('سجّل دخولك لنشر الإعلان ومتابعة حالته.','Sign in to publish your listing and track its status.')}</p><button className="primary-button" onClick={()=>{setNewOpen(false);go('/account');}}>{t('تسجيل الدخول','Sign in')}</button></>}
+    {(newOpen||view==='new')&&<Overlay label={t('أضف إعلانك','Create a listing')} close={()=>{if(!busy){setNewOpen(false);if(view==='new')go('/');}}}><div className="flex items-start justify-between"><div><p className="eyebrow">{t('وصل خدمتك للي يحتاجها','Reach people who need your service')}</p><h2 className="mt-1 text-xl font-bold">{t('أضف إعلانك','Create a listing')}</h2></div><button type="button" className="icon-button" disabled={busy} aria-label={t('إغلاق','Close')} onClick={()=>{setNewOpen(false);if(view==='new')go('/');}}><X size={19}/></button></div>
+      {user?<AdEditor t={t} token={token} categories={serviceCategories} initialCategory={draftCategory} onBusyChange={setBusy} onSave={(body,savedId)=>api<Ad>('market',savedId?'edit':'create',{method:savedId?'PATCH':'POST',body:JSON.stringify(body)},savedId?{id:String(savedId)}:{})} onComplete={savedId=>{setNewOpen(false);navigate(`/ad/${savedId}`);}}/>:<><p className="text-sm text-[#849088]">{t('سجّل دخولك لنشر الإعلان ومتابعة حالته.','Sign in to publish your listing and track its status.')}</p><button className="primary-button" onClick={()=>{setNewOpen(false);go('/account');}}>{t('تسجيل الدخول','Sign in')}</button></>}
       {error&&<p className="market-error" role="alert">{error}</p>}
     </Overlay>}
     {authOpen&&<Overlay label={t('تسجيل الدخول','Sign in')} close={()=>setAuthOpen(false)}><div className="flex items-center justify-between"><h2 className="text-xl font-bold">{t('حساب فرصة','Forsah account')}</h2><button type="button" className="icon-button" aria-label={t('إغلاق','Close')} onClick={()=>setAuthOpen(false)}><X size={19}/></button></div><div className="market-actions"><button aria-pressed={!register} onClick={()=>setRegister(false)}>{t('دخول','Sign in')}</button><button aria-pressed={register} onClick={()=>setRegister(true)}>{t('إنشاء حساب','Register')}</button></div>
-          <form className="market-form" onSubmit={e=>{e.preventDefault();void auth();}}>{register&&<label>{t('الاسم','Name')}<input required autoComplete="name" maxLength={100} value={name} onChange={e=>setName(e.target.value)}/></label>}<label>{t('البريد الإلكتروني','Email')}<input required type="email" autoComplete="email" maxLength={190} value={email} onChange={e=>setEmail(e.target.value)}/></label><label>{t('كلمة المرور (12 حرفًا على الأقل للحساب الجديد)','Password (at least 12 characters for new accounts)')}<input required type="password" autoComplete={register?'new-password':'current-password'} minLength={register?12:1} maxLength={200} value={password} onChange={e=>setPassword(e.target.value)}/></label><button className="market-primary" disabled={busy}>{register?t('إنشاء الحساب','Create account'):t('دخول','Sign in')}</button></form>
+          <form className="market-form" onSubmit={e=>{e.preventDefault();void auth();}}>{register&&<label>{t('الاسم','Name')}<input required autoComplete="name" maxLength={100} value={name} onChange={e=>setName(e.target.value)}/></label>}<label>{t('البريد الإلكتروني','Email')}<input required type="email" autoComplete="email" maxLength={190} value={email} onChange={e=>setEmail(e.target.value)}/></label><label>{t('كلمة المرور (6 أحرف على الأقل للحساب الجديد)','Password (at least 6 characters for new accounts)')}<input required type="password" autoComplete={register?'new-password':'current-password'} minLength={register?6:1} maxLength={200} value={password} onChange={e=>setPassword(e.target.value)}/></label><button className="market-primary" disabled={busy}>{register?t('إنشاء الحساب','Create account'):t('دخول','Sign in')}</button></form>
           {native&&savedBiometric&&<button disabled={busy} onClick={()=>void run(async()=>{const session=await SessionVault.unlock();saveToken(session.token);})}>{t('فتح الجلسة بالبصمة','Unlock session with biometrics')}</button>}
         {error&&<p className="market-error" role="alert">{error}</p>}</Overlay>}
     {notice&&<div className="toast-message" role="status">{notice}</div>}

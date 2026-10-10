@@ -119,7 +119,7 @@ def main():
             call('resource=auth&action=profile','PATCH',{'name':'Updated buyer','phone':'123'},buyer)
             assert call('resource=auth&action=me',token=buyer)['data']['name']=='Updated buyer'
             # Editing returns a published listing to moderation, including its images.
-            call(f'resource=market&action=edit&id={aid}','PATCH',{'title':'Updated','description':'Updated description','category':'أثاث'},seller)
+            call(f'resource=market&action=edit&id={aid}','PATCH',{'title':'Updated','description':'Updated description','category':'المفروشات والموبيليا'},seller)
             call(f'resource=image&id={image}',expected=404)
             call(f'resource=market&action=image-delete&id={aid}&image_id={image}','DELETE',token=buyer,expected=404)
             call(f'resource=market&action=image-delete&id={aid}&image_id={image}','DELETE',token=seller)

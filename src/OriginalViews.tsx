@@ -1,3 +1,4 @@
+import type { Category } from './categories';
 import { Armchair, ArrowLeft, ChevronLeft, Gavel, PackageCheck, Plus, Search, Sparkles, Truck, UsersRound, Wrench, Zap, Sun, Moon, Monitor, Check, Globe2, Bell, ShieldCheck, Trash2, CircleHelp } from 'lucide-react';
 export type Translate = (ar:string,en:string)=>string;
 const words: Record<string,string> = {
@@ -6,17 +7,9 @@ const words: Record<string,string> = {
  'تصفح الحراج':'Browse listings','مزادات':'Auctions','تصفح العمال':'Browse workers','انشر إعلانك':'Post a listing','تصفح الرحلات':'Browse rides','انشر رحلتك':'Post a ride','سطحة إنقاذ':'Vehicle recovery','بنشر متنقل':'Mobile tire service','غرف نوم':'Bedrooms','مجالس':'Living rooms','توصيل طرد':'Parcel delivery','توصيل طعام':'Food delivery','سباكة':'Plumbing','كهرباء':'Electrical','تكييف':'Air conditioning'
 };
 const translate=(t:Translate,value:string)=>t(value,words[value]||value);
-const homeCategories = [
-  { id: 'haraj', title: 'الحراج الشعبي', description: 'بيع وشراء.. ولقطة اليوم تنتظرك', icon: Gavel, color: '#9a5b31', tint: '#f7eadf', subcategories: ['تصفح الحراج', 'مزادات'] },
-  { id: 'workers', title: 'سوق العمالة', description: 'أيدٍ خبيرة لخدماتك اليومية', icon: UsersRound, color: '#3d7290', tint: '#e6f1f5', subcategories: ['تصفح العمال', 'انشر إعلانك'] },
-  { id: 'transport', title: 'المواصلات والنقل الداخلي', description: 'مشاوير ونقل بين أحياء مدينتك', icon: Truck, color: '#98702d', tint: '#f6f0de', subcategories: ['تصفح الرحلات', 'انشر رحلتك'] },
-  { id: 'emergency', title: 'طوارئ السيارات', description: 'مساعدة على الطريق وقت الحاجة', icon: Zap, color: '#ca6246', tint: '#fbe9e4', subcategories: ['سطحة إنقاذ', 'بنشر متنقل'] },
-  { id: 'furniture', title: 'المفروشات والموبيليا', description: 'لمسات جديدة لبيتك ومساحتك', icon: Armchair, color: '#90617e', tint: '#f3eaf1', subcategories: ['غرف نوم', 'مجالس'] },
-  { id: 'logistics', title: 'الخدمات اللوجستية', description: 'توصيل سريع.. من الباب للباب', icon: PackageCheck, color: '#3b826a', tint: '#e5f2ec', subcategories: ['توصيل طرد', 'توصيل طعام'] },
-  { id: 'maintenance', title: 'خدمات الصيانة المنزلية', description: 'فنيون موثوقون لراحة بالك', icon: Wrench, color: '#526fa0', tint: '#e9edf7', subcategories: ['سباكة', 'كهرباء', 'تكييف'] },
-];
+const categoryIcons:Record<string,typeof Gavel>={Gavel,UsersRound,Truck,Zap,Armchair,PackageCheck,Wrench};
 
-export function OriginalHome({ t, browse, create }: { t: Translate; browse: (category?:string,query?:string)=>void; create:(category?:string)=>void }) {
+export function OriginalHome({ t, browse, create, categories }: { categories:Category[]; t: Translate; browse: (category?:string,query?:string)=>void; create:(category?:string)=>void }) {
   return (
     <>
       <div className="hero-panel relative mt-1 overflow-hidden rounded-[28px] px-6 py-7 md:px-10 md:py-9">
@@ -39,17 +32,17 @@ export function OriginalHome({ t, browse, create }: { t: Translate; browse: (cat
           <button onClick={() => browse()} className="text-xs font-bold text-[#47705c]">{t('عرض الكل ','View all ')}<ArrowLeft className="mr-1 inline" size={14} /></button>
         </div>
         <div className="category-grid">
-          {homeCategories.map((category, index) => {
-            const Icon = category.icon;
+          {categories.map((category, index) => {
+            const Icon = categoryIcons[category.icon]||Gavel;
             return (
               <article key={category.id} className="category-card group" style={{ animationDelay: `${index * 45}ms` }}>
-                <button className="flex w-full items-start gap-3 text-right" onClick={() => browse(category.title)}>
+                <button className="flex w-full items-start gap-3 text-right" onClick={() => browse(category.name)}>
                   <span className="category-icon" style={{ backgroundColor: category.tint, color: category.color }}><Icon size={21} strokeWidth={1.8} /></span>
-                  <span className="min-w-0 flex-1 pt-0.5"><span className="block text-[14px] font-bold leading-5">{translate(t,category.title)}</span><span className="mt-1 block text-[11px] leading-[1.65] text-[#8a948d]">{translate(t,category.description)}</span></span>
+                  <span className="min-w-0 flex-1 pt-0.5"><span className="block text-[14px] font-bold leading-5">{t(category.name,category.name_en||category.name)}</span><span className="mt-1 block text-[11px] leading-[1.65] text-[#8a948d]">{translate(t,category.description)}</span></span>
                   <ChevronLeft className="mt-1 shrink-0 text-[#b5bcb6] transition-transform group-hover:-translate-x-1" size={16} />
                 </button>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {category.subcategories.map((sub) => <button key={translate(t,sub)} onClick={() => sub.startsWith('انشر') ? create(category.title) : browse(category.title, sub.startsWith('تصفح') ? '' : sub)} className="subcategory-chip">{translate(t,sub)}</button>)}
+                  {category.subcategories.map((sub) => <button key={translate(t,sub)} onClick={() => sub.startsWith('انشر') ? create(category.name) : browse(category.name, sub.startsWith('تصفح') ? '' : sub)} className="subcategory-chip">{translate(t,sub)}</button>)}
                 </div>
               </article>
             );

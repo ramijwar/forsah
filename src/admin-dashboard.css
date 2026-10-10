@@ -17,3 +17,11 @@
 .admin-modal > * { min-width:0; }
 .admin-modal input,.admin-modal textarea,.admin-modal select { max-width:100%; font-size:16px; }
 .admin-modal select { width:100%; padding:10px; border:1px solid #e4eae2; border-radius:10px; }
+
+.admin-category-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr))); gap:14px; }
+.admin-category-grid h3 { font-weight:700; }
+.admin-category-grid p { margin-block:8px; overflow-wrap:anywhere; }
+.admin-category-grid small { color:var(--admin-muted); }
+.admin-topbar { position:sticky; top:0; z-index:25; background:var(--admin-bg); }
+.admin-modal input[type=checkbox] { width:22px; height:22px; }
+.admin-modal input[type=color] { min-height:44px; }

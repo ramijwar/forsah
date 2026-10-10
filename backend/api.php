@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/config-loader.php';
+require_once __DIR__ . '/categories.php';
 
 /* فرصة API: tokens opaque, random, stored only as SHA-256 hashes. */
 header('Content-Type: application/json; charset=utf-8');
@@ -50,6 +51,7 @@ function db(): PDO {
     $pdo->exec('PRAGMA busy_timeout = 5000');
     $pdo->exec('PRAGMA journal_mode = WAL');
     initializeSchema($pdo);
+    categorySchema($pdo);
     return $pdo;
 }
 function initializeSchema(PDO $pdo): void {
@@ -219,12 +221,13 @@ try {
         ok(['token' => $token, 'expires_at' => $expiresAt, 'user' => userPublic($user)]);
     }
     if ($resource === 'services' && $method === 'GET') {
-        ok(array_map(fn($name) => ['name' => $name, 'title' => $name], ['الحراج الشعبي','سوق العمالة','المواصلات والنقل الداخلي','طوارئ السيارات','المفروشات والموبيليا','الخدمات اللوجستية','خدمات الصيانة المنزلية']));
+        ok(categoriesData($pdo));
     }
     if ($resource === 'ads' && $method === 'POST') {
         rateLimitPublic('ads', 8, 60);
         $body = jsonBody(); $title = trim((string)($body['title'] ?? '')); $description = trim((string)($body['description'] ?? '')); $category = trim((string)($body['category'] ?? ''));
         if ($title === '' || mb_strlen($title) > 120 || $description === '' || mb_strlen($description) > 3000 || $category === '' || mb_strlen($category) > 80) fail(422, 'تحقق من العنوان والوصف والتصنيف.');
+        validCategory($pdo,$category);
         $stmt = $pdo->prepare('INSERT INTO ads(title,description,category,status) VALUES(?,?,?,\'pending\')'); $stmt->execute([$title,$description,$category]);
         ok(['id' => (int)$pdo->lastInsertId(), 'status' => 'pending'], 201);
     }
@@ -249,6 +252,7 @@ try {
         $pdo->prepare('DELETE FROM sessions WHERE token_hash=?')->execute([hash('sha256',$matches[1])]); audit($user,'admin.logout','session',null); ok(['logged_out'=>true]);
     }
     $user = authenticate();
+    categoryAdmin($pdo,$user,$action,$method);
     if ($action === 'me' && $method === 'GET') { unset($user['is_banned']); ok(userPublic($user)); }
     if ($action === 'stats' && $method === 'GET') {
         $result = [
@@ -264,12 +268,13 @@ try {
         $body=jsonBody();
         if($action==='ad') {
             $title=textField($body,'title',120);$description=textField($body,'description',3000,false);$category=textField($body,'category',80);
+            validCategory($pdo,$category);
             $status=$body['status']??'pending';if(!in_array($status,['pending','active'],true))fail(422,'حالة الإعلان غير صالحة.');
             $pdo->prepare('INSERT INTO ads(user_id,title,description,category,status) VALUES(?,?,?,?,?)')->execute([$user['id'],$title,$description,$category,$status]);
             $id=(int)$pdo->lastInsertId();audit($user,'ad.create','ad',$id);ok(['id'=>$id],201);
         }
         $name=textField($body,'name',100);$email=strtolower(textField($body,'email',190));$phone=textField($body,'phone',30,false);$password=textField($body,'password',200);
-        if(!filter_var($email,FILTER_VALIDATE_EMAIL)||strlen($password)<12||strlen($password)>72)fail(422,'تحقق من البريد وكلمة المرور (12–72 بايت).');
+        if(!filter_var($email,FILTER_VALIDATE_EMAIL)||mb_strlen($password)<6||strlen($password)>72)fail(422,'تحقق من البريد وكلمة المرور (6 أحرف على الأقل و72 بايت كحد أقصى).');
         $role=$body['role']??'user';
         if(!in_array($role,['user','admin','support'],true))fail(422,'الدور غير صالح.');
         if($role!=='user')requireAdmin($user,true);
@@ -281,12 +286,13 @@ try {
         foreach($items as &$item) $item['id']=(int)$item['id']; unset($item); ok(['items'=>$items]);
     }
     if ($action === 'ad' && in_array($method,['PATCH','DELETE'],true)) {
-        $id=positiveId(); $stmt=$pdo->prepare('SELECT id FROM ads WHERE id=?'); $stmt->execute([$id]); if(!$stmt->fetch()) fail(404,'الإعلان غير موجود.');
+        $id=positiveId(); $stmt=$pdo->prepare('SELECT id,category FROM ads WHERE id=?'); $stmt->execute([$id]); $existingAd=$stmt->fetch(); if(!$existingAd) fail(404,'الإعلان غير موجود.');
         if($method==='DELETE'){ $pdo->prepare('DELETE FROM ads WHERE id=?')->execute([$id]); audit($user,'ad.delete','ad',$id); ok(['id'=>$id,'deleted'=>true]); }
         $body=jsonBody(); $allowed=['title','description','category','status']; $updates=[]; $values=[];
         foreach($allowed as $field){ if(!array_key_exists($field,$body)) continue; $value=$body[$field];
             if($field==='status'&&!in_array($value,['pending','active','rejected','blocked'],true)) fail(422,'حالة الإعلان غير صالحة.');
             if($field!=='status'){ $value=trim((string)$value); $max=$field==='title'?120:($field==='category'?80:3000); if($value===''&&$field!=='description'||mb_strlen($value)>$max) fail(422,'تحقق من بيانات الإعلان.'); }
+            if($field==='category')validCategory($pdo,$value,$existingAd['category']);
             $updates[]="$field=?"; $values[]=$value;
         }
         if(!$updates) fail(422,'لم يتم إرسال أي تغييرات.'); $updates[]="updated_at=datetime('now')"; $values[]=$id; $pdo->prepare('UPDATE ads SET '.implode(',',$updates).' WHERE id=?')->execute($values); audit($user,'ad.update','ad',$id,array_keys($body)); ok(['id'=>$id]);

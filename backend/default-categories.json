@@ -1,0 +1,115 @@
+[
+  {
+    "id": 1,
+    "name": "الحراج الشعبي",
+    "title": "الحراج الشعبي",
+    "name_en": "Marketplace",
+    "description": "بيع وشراء.. ولقطة اليوم تنتظرك",
+    "icon": "Gavel",
+    "color": "#9a5b31",
+    "tint": "#f7eadf",
+    "subcategories": [
+      "تصفح الحراج",
+      "مزادات"
+    ],
+    "sort_order": 0,
+    "is_active": true
+  },
+  {
+    "id": 2,
+    "name": "سوق العمالة",
+    "title": "سوق العمالة",
+    "name_en": "Workers",
+    "description": "أيدٍ خبيرة لخدماتك اليومية",
+    "icon": "UsersRound",
+    "color": "#3d7290",
+    "tint": "#e6f1f5",
+    "subcategories": [
+      "تصفح العمال",
+      "انشر إعلانك"
+    ],
+    "sort_order": 1,
+    "is_active": true
+  },
+  {
+    "id": 3,
+    "name": "المواصلات والنقل الداخلي",
+    "title": "المواصلات والنقل الداخلي",
+    "name_en": "Transport",
+    "description": "مشاوير ونقل بين أحياء مدينتك",
+    "icon": "Truck",
+    "color": "#98702d",
+    "tint": "#f6f0de",
+    "subcategories": [
+      "تصفح الرحلات",
+      "انشر رحلتك"
+    ],
+    "sort_order": 2,
+    "is_active": true
+  },
+  {
+    "id": 4,
+    "name": "طوارئ السيارات",
+    "title": "طوارئ السيارات",
+    "name_en": "Roadside assistance",
+    "description": "مساعدة على الطريق وقت الحاجة",
+    "icon": "Zap",
+    "color": "#ca6246",
+    "tint": "#fbe9e4",
+    "subcategories": [
+      "سطحة إنقاذ",
+      "بنشر متنقل"
+    ],
+    "sort_order": 3,
+    "is_active": true
+  },
+  {
+    "id": 5,
+    "name": "المفروشات والموبيليا",
+    "title": "المفروشات والموبيليا",
+    "name_en": "Furniture",
+    "description": "لمسات جديدة لبيتك ومساحتك",
+    "icon": "Armchair",
+    "color": "#90617e",
+    "tint": "#f3eaf1",
+    "subcategories": [
+      "غرف نوم",
+      "مجالس"
+    ],
+    "sort_order": 4,
+    "is_active": true
+  },
+  {
+    "id": 6,
+    "name": "الخدمات اللوجستية",
+    "title": "الخدمات اللوجستية",
+    "name_en": "Logistics",
+    "description": "توصيل سريع.. من الباب للباب",
+    "icon": "PackageCheck",
+    "color": "#3b826a",
+    "tint": "#e5f2ec",
+    "subcategories": [
+      "توصيل طرد",
+      "توصيل طعام"
+    ],
+    "sort_order": 5,
+    "is_active": true
+  },
+  {
+    "id": 7,
+    "name": "خدمات الصيانة المنزلية",
+    "title": "خدمات الصيانة المنزلية",
+    "name_en": "Home maintenance",
+    "description": "فنيون موثوقون لراحة بالك",
+    "icon": "Wrench",
+    "color": "#526fa0",
+    "tint": "#e9edf7",
+    "subcategories": [
+      "سباكة",
+      "كهرباء",
+      "تكييف"
+    ],
+    "sort_order": 6,
+    "is_active": true
+  }
+]

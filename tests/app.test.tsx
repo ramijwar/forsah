@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router-dom';
 import App from '../src/App';
 import { ApiError, apiRequest } from '../src/api';
 vi.mock('../src/api', async (original) => ({ ...await original<typeof import('../src/api')>(), apiRequest: vi.fn() }));
+vi.mock('../src/categories',async original=>{const module=await original<typeof import('../src/categories')>();return {...module,useCategories:()=>({categories:module.defaultCategories,categoryError:'',refreshCategories:vi.fn()})};});
 const api = vi.mocked(apiRequest);
 const user = { id: 1, name: 'Test User', email: 'test@example.test', phone: null, role: 'user' };
 const ad = { id: 10, user_id: 1, title: 'My real listing', description: 'Details', category: 'الحراج الشعبي', status: 'pending', images: [] };

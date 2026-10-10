@@ -18,7 +18,7 @@ def main():
         seed = Path(temp) / 'forsah.seed.sqlite'
         connection = sqlite3.connect(seed)
         connection.execute('PRAGMA foreign_keys=ON')
-        for file in ['api.php', 'market.php']:
+        for file in ['api.php', 'market.php', 'categories.php']:
             code = (ROOT / 'backend' / file).read_text()
             schemas = re.findall(r"<<<'SQL'\n(.*?)\nSQL\);", code, flags=re.S)
             if len(schemas) != 1:
@@ -34,7 +34,7 @@ def main():
         with ZipFile(OUT, 'w', ZIP_DEFLATED) as archive:
             for file in sorted((ROOT / 'dist').rglob('*')):
                 if file.is_file(): archive.write(file, str(file.relative_to(ROOT / 'dist')))
-            for name in ['api.php','market.php','config-loader.php','bootstrap-admin.php']:
+            for name in ['api.php','market.php','categories.php','default-categories.json','config-loader.php','bootstrap-admin.php']:
                 archive.write(ROOT / 'backend' / name, name)
             archive.write(ROOT / 'deployment/hosting-auto.php', 'hosting-auto.php')
             archive.write(ROOT / 'deployment/hosting.htaccess', '.htaccess')

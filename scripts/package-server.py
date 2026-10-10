@@ -7,7 +7,7 @@ out.mkdir(exist_ok=True)
 with ZipFile(out / 'forsah-server-v2.zip', 'w', ZIP_DEFLATED) as z:
     for file in (ROOT / 'dist').rglob('*'):
         if file.is_file(): z.write(file, 'public/' + str(file.relative_to(ROOT / 'dist')))
-    for name in ['api.php', 'market.php', 'config-loader.php']:
+    for name in ['api.php', 'market.php', 'categories.php', 'default-categories.json', 'config-loader.php']:
         z.write(ROOT / 'backend' / name, 'public/' + name)
     z.write(ROOT / 'deployment/public.htaccess', 'public/.htaccess')
     z.write(ROOT / 'deployment/config.example.php', 'private/config.example.php')

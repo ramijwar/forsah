@@ -73,7 +73,7 @@ def main() -> None:
             initial_stats = call('resource=admin&action=stats', token=admin_token)['data']
             assert initial_stats['pending_reports'] == 0
 
-            ad = call('resource=ads', 'POST', {'title': 'إعلان اختبار', 'description': 'وصف اختباري', 'category': 'صيانة'}, expected=201)['data']
+            ad = call('resource=ads', 'POST', {'title': 'إعلان اختبار', 'description': 'وصف اختباري', 'category': 'خدمات الصيانة المنزلية'}, expected=201)['data']
             ticket = call('resource=support&action=tickets', 'POST', {'name': 'عميل اختبار', 'email': 'customer@example.test', 'subject': 'مساعدة', 'message': 'أحتاج مساعدة'}, expected=201)['data']
             report = call('resource=reports&action=create', 'POST', {'name': 'مبلّغ اختبار', 'email': 'reporter@example.test', 'entity_type': 'ad', 'entity_id': ad['id'], 'reason': 'محتوى يحتاج مراجعة', 'description': 'بلاغ تجريبي'}, expected=201)['data']
             stats = call('resource=admin&action=stats', token=admin_token)['data']
@@ -104,20 +104,42 @@ def main() -> None:
             call(f'resource=admin&action=user&id={user_id}', 'PATCH', {'is_banned': False}, support_token)
             call(f'resource=admin&action=user&id={user_id}', 'PATCH', {'role': 'admin'}, support_token, expected=403)
             call(f'resource=admin&action=user&id={user_id}', 'PATCH', {'role': 'support'}, admin_token)
-            new_body={'name':'New member','email':'new@example.test','phone':'123','password':TEST_PASSWORD}
+            new_body={'name':'New member','email':'new@example.test','phone':'123','password':'abc123'}
             call('resource=admin&action=user','POST',new_body,support_token,expected=403)
             created_user=call('resource=admin&action=user','POST',new_body,admin_token,expected=201)['data']
             assert created_user['id']>0
             call('resource=admin&action=user','POST',new_body,admin_token,expected=409)
-            assert call('resource=auth&action=login','POST',{'email':new_body['email'],'password':TEST_PASSWORD})['data']['user']['role']=='user'
+            assert call('resource=auth&action=login','POST',{'email':new_body['email'],'password':'abc123'})['data']['user']['role']=='user'
             call('resource=admin&action=user','POST',{**new_body,'email':'bad@example.test','password':'short'},admin_token,expected=422)
             limited=call('resource=admin&action=user','POST',{**new_body,'email':'limited@example.test','role':'admin'},admin_token,expected=201)['data']
-            limited_token=call('resource=admin&action=login','POST',{'email':'limited@example.test','password':TEST_PASSWORD})['data']['token']
+            limited_token=call('resource=admin&action=login','POST',{'email':'limited@example.test','password':'abc123'})['data']['token']
             call('resource=admin&action=user','POST',{**new_body,'email':'forged@example.test','role':'admin'},limited_token,expected=403)
-            new_ad={'title':'Admin listing','description':'Created by administrator','category':'صيانة','status':'active'}
+            new_ad={'title':'Admin listing','description':'Created by administrator','category':'خدمات الصيانة المنزلية','status':'active'}
             call('resource=admin&action=ad','POST',new_ad,support_token,expected=403)
             new_id=call('resource=admin&action=ad','POST',new_ad,admin_token,expected=201)['data']['id']
             assert call(f'resource=market&action=detail&id={new_id}')['data']['title']=='Admin listing'
+            category_body={'name':'قسم اختبار','name_en':'Test category','description':'Description','icon':'Gavel','color':'#123456','tint':'#eeeeee','subcategories':['خيار أول'],'sort_order':8,'is_active':True}
+            call('resource=admin&action=category','POST',category_body,support_token,expected=403)
+            cid=call('resource=admin&action=category','POST',category_body,admin_token,expected=201)['data']['id']
+            assert any(c['id']==cid and c['name']=='قسم اختبار' for c in call('resource=services')['data'])
+            call('resource=admin&action=category','POST',category_body,admin_token,expected=409)
+            cat_ad=call('resource=admin&action=ad','POST',{**new_ad,'category':'قسم اختبار'},admin_token,expected=201)['data']['id']
+            call('resource=admin&action=ad','POST',{**new_ad,'category':'does-not-exist'},admin_token,expected=422)
+            renamed={**category_body,'name':'قسم معدل','sort_order':0}
+            call(f'resource=admin&action=category&id={cid}','PATCH',renamed,admin_token)
+            assert call(f'resource=market&action=detail&id={cat_ad}')['data']['category']=='قسم معدل'
+            call(f'resource=admin&action=category&id={cid}','PATCH',{**renamed,'is_active':False},admin_token)
+            assert all(c['id']!=cid for c in call('resource=services')['data'])
+            call('resource=admin&action=ad','POST',{**new_ad,'category':'قسم معدل'},admin_token,expected=422)
+            call(f'resource=admin&action=category&id={cid}','DELETE',{},admin_token,expected=409)
+            replacement=call('resource=services')['data'][0]
+            call(f'resource=admin&action=category&id={cid}','DELETE',{'replacement_id':replacement['id']},admin_token)
+            assert call(f'resource=market&action=detail&id={cat_ad}')['data']['category']==replacement['name']
+            assert all(c['id']!=cid for c in call('resource=admin&action=categories',token=admin_token)['data']['items'])
+            # Reopening the API does not resurrect removed seed categories.
+            empty_id=call('resource=admin&action=category','POST',{**category_body,'name':'Disposable'},admin_token,expected=201)['data']['id']
+            call(f'resource=admin&action=category&id={empty_id}','DELETE',{},admin_token)
+            assert all(c['id']!=empty_id for c in call('resource=services')['data'])
             call('resource=admin&action=logout', 'POST', {}, admin_token)
             call('resource=admin&action=stats', token=admin_token, expected=401)
             audits = sqlite3.connect(env['FORSAH_DB_PATH']).execute('SELECT COUNT(*) FROM admin_audit_log').fetchone()[0]

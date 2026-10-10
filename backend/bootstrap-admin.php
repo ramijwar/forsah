@@ -27,9 +27,9 @@ $existing = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE role IN ('super_a
 if ($existing > 0) { fwrite(STDERR, "يوجد حساب إداري بالفعل. لم يتم إنشاء حساب إضافي.\n"); exit(2); }
 $name = trim((string)(getenv('FORSAH_ADMIN_NAME') ?: prompt('اسم المدير الفائق: ')));
 $email = strtolower(trim((string)(getenv('FORSAH_ADMIN_EMAIL') ?: prompt('البريد الإلكتروني: '))));
-$password = (string)(getenv('FORSAH_ADMIN_PASSWORD') ?: promptSecret('كلمة مرور قوية (16 حرفًا على الأقل): '));
+$password = (string)(getenv('FORSAH_ADMIN_PASSWORD') ?: promptSecret('كلمة مرور قوية (6 أحرف على الأقل): '));
 if ($name === '' || mb_strlen($name) > 100 || !filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 190) { fwrite(STDERR, "الاسم أو البريد الإلكتروني غير صالح.\n"); exit(1); }
-if (strlen($password) < 16 || strlen($password) > 200) { fwrite(STDERR, "يجب أن تكون كلمة المرور بين 16 و200 حرف.\n"); exit(1); }
+if (mb_strlen($password) < 6 || strlen($password) > 72) { fwrite(STDERR, "يجب أن تكون كلمة المرور 6 أحرف على الأقل وحتى 72 بايت.\n"); exit(1); }
 try {
  $stmt=$pdo->prepare("INSERT INTO users(name,email,password_hash,role) VALUES(?,?,?,'super_admin')");
  $stmt->execute([$name,$email,password_hash($password,PASSWORD_DEFAULT)]);

@@ -98,7 +98,7 @@ function marketRoutes(string $resource,string $action,string $method,PDO $pdo): 
             if(!filter_var($email,FILTER_VALIDATE_EMAIL))fail(422,'Invalid email');
             if($action==='register') {
                 rateLimitPublic('register',5,60); $name=textField($b,'name',100);
-                if(strlen($password)<12 || strlen($password)>72)fail(422,'كلمة المرور بين 12 و72 بايت / Password must be 12–72 bytes');
+                if(mb_strlen($password)<6 || strlen($password)>72)fail(422,'كلمة المرور 6 أحرف على الأقل وحتى 72 بايت / Password: minimum 6 characters, maximum 72 bytes');
                 // Only register new identities. Never claim a guest/support/admin record by email.
                 $hash=password_hash($password,PASSWORD_DEFAULT);
                 // Serialize the first-account election. The marker is never reset if users are deleted.
@@ -129,7 +129,7 @@ function marketRoutes(string $resource,string $action,string $method,PDO $pdo): 
         if ($method==='POST' && $action==='password') {
             rateLimitPublic('password',5,15); $b=jsonBody(); $old=textField($b,'current_password',200); $new=textField($b,'password',200);
             $q=$pdo->prepare('SELECT password_hash FROM users WHERE id=?');$q->execute([$u['id']]);
-            if(!password_verify($old,$q->fetchColumn() ?: '') || strlen($new)<12 || strlen($new)>72)fail(422,'تحقق من كلمة المرور / Check password');
+            if(!password_verify($old,$q->fetchColumn() ?: '') || mb_strlen($new)<6 || strlen($new)>72)fail(422,'تحقق من كلمة المرور / Check password');
             $pdo->beginTransaction();
             $pdo->prepare('UPDATE users SET password_hash=? WHERE id=?')->execute([password_hash($new,PASSWORD_DEFAULT),$u['id']]);
             $pdo->prepare('DELETE FROM sessions WHERE user_id=?')->execute([$u['id']]);$pdo->commit();ok(['login_required'=>true]);
@@ -154,11 +154,13 @@ function marketRoutes(string $resource,string $action,string $method,PDO $pdo): 
         $u=member();$b=$action==='image'?[]:jsonBody();
         if($method==='POST' && $action==='create') {
             rateLimitPublic('member-ads',15,60);$title=textField($b,'title',120);$description=textField($b,'description',3000);$category=textField($b,'category',80);
+            validCategory($pdo,$category);
             $pdo->prepare("INSERT INTO ads(user_id,title,description,category,status) VALUES(?,?,?,?,'pending')")->execute([$u['id'],$title,$description,$category]);ok(adData(ownedAd((int)$pdo->lastInsertId(),$u)),201);
         }
         $id=positiveId();$ad=ownedAd($id,$u);
         if($method==='PATCH' && $action==='edit') {
             $title=textField($b,'title',120);$description=textField($b,'description',3000);$category=textField($b,'category',80);
+            validCategory($pdo,$category,$ad['category']);
             if($ad['status']==='blocked')fail(403,'الإعلان محظور / Ad blocked');
             $pdo->prepare("UPDATE ads SET title=?,description=?,category=?,status='pending',updated_at=datetime('now') WHERE id=? AND user_id=?")->execute([$title,$description,$category,$id,$u['id']]);ok(adData(ownedAd($id,$u)));
         }
