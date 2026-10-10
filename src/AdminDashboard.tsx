@@ -1,9 +1,10 @@
+import Overlay from './Overlay';
 import ModerationImages from './ModerationImages';
 import { ApiError, API_BASE } from './api';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import {
-  Activity, ArrowUpRight, BadgeCheck, Ban, Check,
+  Plus, Activity, ArrowUpRight, BadgeCheck, Ban, Check,
   ChevronLeft, CircleHelp, Clock3, FileText, Flag, LayoutDashboard, LoaderCircle,
   LogOut, MessageCircle, Pencil, RefreshCw, Search, Send, Shield, ShieldCheck,
   Sparkles, Tag, Trash2, Users, X,
@@ -67,7 +68,7 @@ export default function AdminDashboard({ memberToken = '', onSessionEnded }: { m
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [editor, setEditor] = useState<{ kind: 'ad' | 'user'; id: number; title?: string; description?: string; category?: string; name?: string; email?: string; phone?: string; role?: Role } | null>(null);
+  const [editor, setEditor] = useState<{ kind: 'ad' | 'user'; id: number; create?: boolean; password?: string; status?: string; title?: string; description?: string; category?: string; name?: string; email?: string; phone?: string; role?: Role } | null>(null);
 
   const logout = useCallback(async () => {
     if (token && API_BASE) { try { await request(token, 'logout', { method: 'POST' }); } catch { /* local session still removed */ } }
@@ -126,8 +127,8 @@ export default function AdminDashboard({ memberToken = '', onSessionEnded }: { m
 
   const mutate = async (action: string, method: string, id: number, body?: unknown) => {
     setBusy(true); setError(''); setNotice('');
-    try { await request(token, action, { method, id, body }); setNotice('تم حفظ التغيير بنجاح.'); await load(section); try { setStats(await request<Stats>(token, 'stats')); } catch { /* the changed record is saved; refresh summary on next visit */ } }
-    catch (caught) { setError(caught instanceof Error ? caught.message : 'تعذر حفظ التغيير.'); }
+    try { await request(token, action, { method, ...(id?{id}:{}), body }); setNotice('تم حفظ التغيير بنجاح.'); await load(section); try { setStats(await request<Stats>(token, 'stats')); } catch { /* the changed record is saved; refresh summary on next visit */ } return true; }
+    catch (caught) { setError(caught instanceof Error ? caught.message : 'تعذر حفظ التغيير.'); return false; }
     finally { setBusy(false); }
   };
 
@@ -178,9 +179,9 @@ export default function AdminDashboard({ memberToken = '', onSessionEnded }: { m
   };
   const submitEditor = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); if (!editor) return;
-    const { kind, id, ...body } = editor;
-    await mutate(kind, 'PATCH', id, kind === 'ad' ? body : { name: body.name, email: body.email, phone: body.phone, ...(profile.role === 'super_admin' && body.role ? { role: body.role } : {}) });
-    setEditor(null);
+    const { kind, id, create, ...body } = editor;
+    const saved=await mutate(kind, create?'POST':'PATCH', id, kind === 'ad' ? body : { ...(create?{password:body.password}:{}), name: body.name, email: body.email, phone: body.phone, ...(profile.role === 'super_admin' && body.role ? { role: body.role } : {}) });
+    if(saved)setEditor(null);
   };
 
   return <div className="admin-app" dir="rtl">
@@ -195,6 +196,7 @@ export default function AdminDashboard({ memberToken = '', onSessionEnded }: { m
       {error && <div className="admin-alert admin-alert-inline" role="alert"><span>{error}</span><button onClick={() => setError('')} aria-label="إغلاق"><X size={15} /></button></div>}
       {notice && <div className="admin-success" role="status"><Check size={16} />{notice}<button onClick={() => setNotice('')} aria-label="إغلاق"><X size={14} /></button></div>}
       <div className="admin-mobile-nav">{nav.map(({ id, icon: Icon }) => <button key={id} className={section === id ? 'active' : ''} onClick={() => { setSection(id); setQuery(''); }}><Icon size={16} /><span>{labels[id]}</span></button>)}</div>
+      {profile.role!=='support'&&<div className="admin-create-actions"><button className="admin-primary" disabled={busy} onClick={()=>{setError('');setSection('ads');setEditor({kind:'ad',id:0,create:true,status:'pending'});}}><Plus size={18}/>إضافة إعلان</button><button className="admin-primary" disabled={busy} onClick={()=>{setError('');setSection('users');setEditor({kind:'user',id:0,create:true,role:'user'});}}><Plus size={18}/>إضافة مستخدم</button></div>}
       {section === 'overview' && <section className="admin-content">
         <div className="admin-welcome"><div><span className="admin-eyebrow">نظرة عامة على المنصة</span><h2>أهلًا {profile.name}، إليك ملخص فرصة</h2><p>تابع نشاط المنصة والطلبات التي تحتاج إلى مراجعة.</p></div><span className="welcome-illustration"><Activity size={30} /></span></div>
         <div className="admin-stat-grid">
@@ -220,7 +222,7 @@ export default function AdminDashboard({ memberToken = '', onSessionEnded }: { m
           <div className="admin-ticket-thread">{selectedTicket ? <><div className="thread-header"><div><span className="ticket-avatar">{selectedTicket.user_name.slice(0, 1)}</span><span><strong>{selectedTicket.subject}</strong><small>{selectedTicket.user_name} · {selectedTicket.user_email}</small></span></div><select aria-label="حالة التذكرة" value={selectedTicket.status} onChange={(event) => void mutate('ticket', 'PATCH', selectedTicket.id, { status: event.target.value })}><option value="open">مفتوحة</option><option value="in_progress">قيد المعالجة</option><option value="resolved">مغلقة</option></select></div><div className="thread-messages">{(selectedTicket.messages ?? []).map((message) => <div key={message.id} className={`thread-message ${message.sender_type !== 'user' ? 'staff-message' : ''}`}><div className="message-meta"><strong>{message.sender_name}</strong><time>{dateLabel(message.created_at)}</time></div><p>{message.content}</p></div>)}</div><form className="thread-reply" onSubmit={sendReply}><textarea value={reply} onChange={(event) => setReply(event.target.value)} maxLength={5000} rows={2} placeholder="اكتب ردًا للمستخدم..." required /><button className="admin-primary" disabled={busy || !reply.trim()}><Send size={16} /> إرسال الرد</button></form></> : <div className="thread-empty"><MessageCircle size={28} /><strong>اختر تذكرة لعرض المحادثة</strong><span>يمكنك قراءة الرسائل والرد عليها من هنا.</span></div>}</div>
         </div>
       </section>}
-      {editor && <div className="admin-modal-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditor(null); }}><form className="admin-modal" onSubmit={submitEditor}><div className="admin-modal-heading"><div><span className="admin-eyebrow">تحديث البيانات</span><h2>{editor.kind === 'ad' ? 'تعديل الإعلان' : 'تعديل بيانات المستخدم'}</h2></div><button type="button" onClick={() => setEditor(null)} aria-label="إغلاق"><X size={19} /></button></div>{editor.kind === 'ad' ? <><ModerationImages id={editor.id} token={token}/><label>العنوان<input required maxLength={120} value={editor.title ?? ''} onChange={(e) => setEditor({ ...editor, title: e.target.value })} /></label><label>التصنيف<input required maxLength={80} value={editor.category ?? ''} onChange={(e) => setEditor({ ...editor, category: e.target.value })} /></label><label>الوصف<textarea rows={4} maxLength={3000} value={editor.description ?? ''} onChange={(e) => setEditor({ ...editor, description: e.target.value })} /></label></> : <><label>الاسم<input required maxLength={100} value={editor.name ?? ''} onChange={(e) => setEditor({ ...editor, name: e.target.value })} /></label><label>البريد الإلكتروني<input type="email" required value={editor.email ?? ''} onChange={(e) => setEditor({ ...editor, email: e.target.value })} /></label><label>رقم الهاتف<input maxLength={30} value={editor.phone ?? ''} onChange={(e) => setEditor({ ...editor, phone: e.target.value })} /></label>{profile.role === 'super_admin' && <label>الدور الإداري<select value={editor.role ?? 'user'} onChange={(e) => setEditor({ ...editor, role: e.target.value as Role })}><option value="user">مستخدم</option><option value="support">دعم فني</option><option value="admin">مدير</option></select></label>}</>}<div className="admin-modal-actions"><button type="button" className="admin-secondary" onClick={() => setEditor(null)}>إلغاء</button><button className="admin-primary" disabled={busy}><Check size={16} /> حفظ التعديلات</button></div></form></div>}
+      {editor && <Overlay label={editor.create?(editor.kind==='ad'?'إضافة إعلان':'إضافة مستخدم'):(editor.kind==='ad'?'تعديل الإعلان':'تعديل بيانات المستخدم')} panelClassName="admin-editor-panel" close={()=>{if(!busy)setEditor(null);}}><form className="admin-modal" onSubmit={submitEditor}><div className="admin-modal-heading"><div><span className="admin-eyebrow">تحديث البيانات</span><h2>{editor.create?(editor.kind==='ad'?'إضافة إعلان':'إضافة مستخدم'):(editor.kind === 'ad' ? 'تعديل الإعلان' : 'تعديل بيانات المستخدم')}</h2></div><button type="button" disabled={busy} onClick={() => setEditor(null)} aria-label="إغلاق"><X size={19} /></button></div>{editor.kind === 'ad' ? <>{!editor.create&&<ModerationImages id={editor.id} token={token}/>}{editor.create&&<label>حالة الإعلان<select value={editor.status??'pending'} onChange={e=>setEditor({...editor,status:e.target.value})}><option value="pending">قيد المراجعة</option><option value="active">منشور</option></select></label>}<label>العنوان<input required maxLength={120} value={editor.title ?? ''} onChange={(e) => setEditor({ ...editor, title: e.target.value })} /></label><label>التصنيف<input required maxLength={80} value={editor.category ?? ''} onChange={(e) => setEditor({ ...editor, category: e.target.value })} /></label><label>الوصف<textarea rows={4} maxLength={3000} value={editor.description ?? ''} onChange={(e) => setEditor({ ...editor, description: e.target.value })} /></label></> : <>{editor.create&&<label>كلمة المرور<input required type="password" autoComplete="new-password" minLength={12} maxLength={72} value={editor.password??''} onChange={e=>setEditor({...editor,password:e.target.value})}/><small>12 حرفًا على الأقل، وبحد أقصى 72 بايت.</small></label>}<label>الاسم<input required maxLength={100} value={editor.name ?? ''} onChange={(e) => setEditor({ ...editor, name: e.target.value })} /></label><label>البريد الإلكتروني<input type="email" required value={editor.email ?? ''} onChange={(e) => setEditor({ ...editor, email: e.target.value })} /></label><label>رقم الهاتف<input maxLength={30} value={editor.phone ?? ''} onChange={(e) => setEditor({ ...editor, phone: e.target.value })} /></label>{profile.role === 'super_admin' && <label>الدور الإداري<select value={editor.role ?? 'user'} onChange={(e) => setEditor({ ...editor, role: e.target.value as Role })}><option value="user">مستخدم</option><option value="support">دعم فني</option><option value="admin">مدير</option></select></label>}</>}{error&&<p className="admin-alert" role="alert">{error}</p>}<div className="admin-modal-actions"><button type="button" disabled={busy} className="admin-secondary" onClick={() => setEditor(null)}>إلغاء</button><button className="admin-primary" disabled={busy}><Check size={16} /> {editor.create?'إنشاء':'حفظ التعديلات'}</button></div></form></Overlay>}
       <footer className="admin-footer"><span>فرصة · لوحة إدارة آمنة</span><span><ShieldCheck size={14} /> تغييراتك تسجّل على الخادم</span></footer>
     </main>
   </div>;

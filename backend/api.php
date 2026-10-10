@@ -259,6 +259,23 @@ try {
           'open_tickets'=>(int)$pdo->query("SELECT COUNT(*) FROM support_tickets WHERE status IN ('open','in_progress')")->fetchColumn(),
         ]; ok($result);
     }
+    if (in_array($action,['ad','user'],true) && $method==='POST') {
+        if(!in_array($user['role'],['admin','super_admin'],true)) fail(403,'إنشاء السجلات متاح للمدير فقط.');
+        $body=jsonBody();
+        if($action==='ad') {
+            $title=textField($body,'title',120);$description=textField($body,'description',3000,false);$category=textField($body,'category',80);
+            $status=$body['status']??'pending';if(!in_array($status,['pending','active'],true))fail(422,'حالة الإعلان غير صالحة.');
+            $pdo->prepare('INSERT INTO ads(user_id,title,description,category,status) VALUES(?,?,?,?,?)')->execute([$user['id'],$title,$description,$category,$status]);
+            $id=(int)$pdo->lastInsertId();audit($user,'ad.create','ad',$id);ok(['id'=>$id],201);
+        }
+        $name=textField($body,'name',100);$email=strtolower(textField($body,'email',190));$phone=textField($body,'phone',30,false);$password=textField($body,'password',200);
+        if(!filter_var($email,FILTER_VALIDATE_EMAIL)||strlen($password)<12||strlen($password)>72)fail(422,'تحقق من البريد وكلمة المرور (12–72 بايت).');
+        $role=$body['role']??'user';
+        if(!in_array($role,['user','admin','support'],true))fail(422,'الدور غير صالح.');
+        if($role!=='user')requireAdmin($user,true);
+        $pdo->prepare('INSERT INTO users(name,email,phone,password_hash,role) VALUES(?,?,?,?,?)')->execute([$name,$email,$phone,password_hash($password,PASSWORD_DEFAULT),$role]);
+        $id=(int)$pdo->lastInsertId();audit($user,'user.create','user',$id,['role'=>$role]);ok(['id'=>$id],201);
+    }
     if ($action === 'ads' && $method === 'GET') {
         $items=$pdo->query("SELECT a.id,a.title,a.description,a.category,a.status,a.created_at,u.name AS owner_name,u.email AS owner_email FROM ads a LEFT JOIN users u ON u.id=a.user_id ORDER BY CASE a.status WHEN 'pending' THEN 0 ELSE 1 END,a.created_at DESC LIMIT 500")->fetchAll();
         foreach($items as &$item) $item['id']=(int)$item['id']; unset($item); ok(['items'=>$items]);

@@ -158,3 +158,16 @@ it('loads only the selected full photo and switches the detail carousel',async()
   await actions.click(screen.getByRole('button',{name:'عرض الصورة 4'}));
   await waitFor(()=>expect(originals()).toEqual(['11','12','14']));
 });
+
+it('shows logout and administration outside collapsed profile settings',async()=>{
+  sessionStorage.setItem('forsah-member-token','session');
+  api.mockImplementation(async(resource)=>resource==='auth'?{...user,role:'super_admin'}:[]);
+  mount('/account');
+  const admin=await screen.findByRole('button',{name:'لوحة الإدارة'});
+  const logout=screen.getByRole('button',{name:'تسجيل الخروج'});
+  expect(admin.closest('details')).toBeNull();expect(logout.closest('details')).toBeNull();
+  expect(admin.querySelector('svg')).not.toBeNull();
+  await userEvent.setup().click(logout);
+  await waitFor(()=>expect(localStorage.getItem('forsah-member-token')).toBeNull());
+  expect(api.mock.calls.some(([r,o,p])=>r==='auth'&&o?.method==='POST'&&p?.action==='logout')).toBe(true);
+});

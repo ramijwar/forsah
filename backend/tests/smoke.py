@@ -104,6 +104,20 @@ def main() -> None:
             call(f'resource=admin&action=user&id={user_id}', 'PATCH', {'is_banned': False}, support_token)
             call(f'resource=admin&action=user&id={user_id}', 'PATCH', {'role': 'admin'}, support_token, expected=403)
             call(f'resource=admin&action=user&id={user_id}', 'PATCH', {'role': 'support'}, admin_token)
+            new_body={'name':'New member','email':'new@example.test','phone':'123','password':TEST_PASSWORD}
+            call('resource=admin&action=user','POST',new_body,support_token,expected=403)
+            created_user=call('resource=admin&action=user','POST',new_body,admin_token,expected=201)['data']
+            assert created_user['id']>0
+            call('resource=admin&action=user','POST',new_body,admin_token,expected=409)
+            assert call('resource=auth&action=login','POST',{'email':new_body['email'],'password':TEST_PASSWORD})['data']['user']['role']=='user'
+            call('resource=admin&action=user','POST',{**new_body,'email':'bad@example.test','password':'short'},admin_token,expected=422)
+            limited=call('resource=admin&action=user','POST',{**new_body,'email':'limited@example.test','role':'admin'},admin_token,expected=201)['data']
+            limited_token=call('resource=admin&action=login','POST',{'email':'limited@example.test','password':TEST_PASSWORD})['data']['token']
+            call('resource=admin&action=user','POST',{**new_body,'email':'forged@example.test','role':'admin'},limited_token,expected=403)
+            new_ad={'title':'Admin listing','description':'Created by administrator','category':'صيانة','status':'active'}
+            call('resource=admin&action=ad','POST',new_ad,support_token,expected=403)
+            new_id=call('resource=admin&action=ad','POST',new_ad,admin_token,expected=201)['data']['id']
+            assert call(f'resource=market&action=detail&id={new_id}')['data']['title']=='Admin listing'
             call('resource=admin&action=logout', 'POST', {}, admin_token)
             call('resource=admin&action=stats', token=admin_token, expected=401)
             audits = sqlite3.connect(env['FORSAH_DB_PATH']).execute('SELECT COUNT(*) FROM admin_audit_log').fetchone()[0]

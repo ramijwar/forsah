@@ -49,10 +49,23 @@ try {
  writeFileSync('artifacts/visual/layout-comparison.json',JSON.stringify(comparisons,null,2));
  const page=await browser.newPage({viewport:{width:390,height:844}});const errors=[],missing=[];
  page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>{if(r.status()>=400)missing.push(r.url());});
+ let rejectAdminSave=false;const adminWrites=[];
  const account={id:1,name:'Test Member',email:'member@example.test',role:'user',phone:''};
  await page.route('https://t3lam.site/**',route=>{
    const url=new URL(route.request().url()),resource=url.searchParams.get('resource'),action=url.searchParams.get('action');let data;
-   if(resource==='auth')data=account;
+   if(resource==='image')return route.fulfill({contentType:'image/svg+xml',headers:{'Access-Control-Allow-Origin':'*'},body:'<svg xmlns="http://www.w3.org/2000/svg" width="400" height="280"><rect width="400" height="280" fill="green"/></svg>'});
+   if(resource==='admin') {
+     if(route.request().method()==='POST'||route.request().method()==='PATCH') {
+       adminWrites.push({action,body:route.request().postDataJSON()});
+       if(rejectAdminSave)return route.fulfill({status:422,headers:{'Access-Control-Allow-Origin':'*'},json:{ok:false,error:'اختبار رفض الحفظ'}});
+       data={id:8};
+     } else if(action==='me')data=account;
+     else if(action==='stats')data={users:1,active_ads:1,pending_ads:0,pending_reports:0,open_tickets:0};
+     else if(action==='ads')data={items:[{id:3,title:'Admin image listing',description:'Details',category:'صيانة',status:'active',created_at:'2026-10-10 00:00:00',owner_name:'Owner',owner_email:'owner@example.test'}]};
+     else data={items:[]};
+   }
+   else if(resource==='market'&&action==='detail')data={id:3,images:[1,2,3,4]};
+   else if(resource==='auth')data=account;
    else if(resource==='chat')data=[{id:4,partner:'Real conversation',title:'Listing',last_message:'Server message'}];
    else if(resource==='member-support')data=[{id:9,subject:'Server support ticket',status:'in_progress',updated_at:'2026-10-09'}];
    else if(resource==='favorites')data=[];
@@ -93,6 +106,38 @@ try {
  await page.keyboard.press('Escape');
  await page.getByRole('button',{name:'أضف إعلانك',exact:true}).click();const title=page.getByLabel('العنوان',{exact:true});await title.fill('Input keeps focus');
  assert(await title.evaluate(e=>document.activeElement===e),'Form input lost focus');await page.keyboard.press('Escape');
- assert(!errors.length&&!missing.length,JSON.stringify({errors,missing}));
+ account.role='super_admin';
+ await page.goto(origin+'/#/account',{waitUntil:'networkidle'});await page.reload({waitUntil:'networkidle'});
+ const adminButton=page.getByRole('button',{name:'لوحة الإدارة',exact:true});await adminButton.waitFor();
+ assert(await adminButton.evaluate(e=>!e.closest('details')&&!!e.querySelector('svg')),'Admin entry is hidden or lacks icon');
+ assert(await page.getByRole('button',{name:'تسجيل الخروج',exact:true}).evaluate(e=>!e.closest('details')),'Logout is hidden');
+ await adminButton.click();await page.getByRole('button',{name:'إضافة إعلان',exact:true}).waitFor();
+ await page.getByRole('button',{name:'إضافة إعلان',exact:true}).click();
+ let dialog=page.getByRole('dialog',{name:'إضافة إعلان',exact:true});
+ await dialog.getByLabel('العنوان',{exact:true}).fill('New admin listing');await dialog.getByLabel('التصنيف',{exact:true}).fill('صيانة');
+ await dialog.getByRole('button',{name:'إنشاء',exact:true}).click();await dialog.waitFor({state:'hidden'});
+ assert(adminWrites.some(w=>w.action==='ad'&&w.body.title==='New admin listing'),'Create ad did not call backend');
+ await page.getByRole('button',{name:'إضافة مستخدم',exact:true}).click();dialog=page.getByRole('dialog',{name:'إضافة مستخدم',exact:true});
+ await dialog.getByLabel('الاسم',{exact:true}).fill('New member');await dialog.getByLabel('البريد الإلكتروني',{exact:true}).fill('new@example.test');await dialog.getByLabel('كلمة المرور',{exact:true}).fill('Strong-password-123');
+ await dialog.getByRole('button',{name:'إنشاء',exact:true}).click();await dialog.waitFor({state:'hidden'});
+ assert(adminWrites.some(w=>w.action==='user'&&w.body.name==='New member'),'Create user did not call backend');
+ await page.getByRole('button',{name:'إضافة إعلان',exact:true}).click();await page.keyboard.press('Escape');
+ for(const viewport of [{width:360,height:640},{width:390,height:420},{width:1280,height:720}]) {
+   await page.setViewportSize(viewport);
+   await page.locator('.action-edit').first().click();dialog=page.getByRole('dialog',{name:'تعديل الإعلان',exact:true});
+   await dialog.locator('img').nth(3).waitFor();
+   const box=await dialog.boundingBox();assert(box.y>=0&&box.y+box.height<=viewport.height&&box.width<=viewport.width,'Editor exceeds viewport');
+   await dialog.hover();await page.mouse.wheel(0,1800);await page.waitForTimeout(300);
+   assert(await dialog.evaluate(e=>e.scrollTop>0),'Image editor does not scroll');
+   await dialog.getByLabel('الوصف',{exact:true}).fill('Updated details');
+   rejectAdminSave=true;await dialog.getByRole('button',{name:'حفظ التعديلات',exact:true}).click();await dialog.getByRole('alert').waitFor();
+   assert(await dialog.getByLabel('الوصف',{exact:true}).inputValue()==='Updated details','Failed save lost form');
+   rejectAdminSave=false;await dialog.getByRole('button',{name:'حفظ التعديلات',exact:true}).click();await dialog.waitFor({state:'hidden'});
+   assert(await page.evaluate(()=>document.body.style.overflow)==='','Admin modal left page locked');
+ }
+ // Deliberate 422 responses above exercise error handling.
+ assert(!errors.length,JSON.stringify({errors}));
+ console.log('PASS visible account actions, admin creation, four-image editor scroll at mobile/short/desktop sizes, failed-save retention and scroll cleanup.');
+ assert(!errors.length&&!missing.filter(url=>!url.includes("resource=admin")).length,JSON.stringify({errors,missing}));
  console.log('PASS popover toggle/Escape/outside dismissal, no navigation/layout jump, create modal, real account adapters, input focus, original settings, RTL/LTR, dark mode and nested assets.');
 } finally {if(browser)await browser.close();server.close();}

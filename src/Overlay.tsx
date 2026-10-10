@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 
 // Stable component: fields do not remount as the parent form state changes.
-export default function Overlay({label,close,children}:{label:string;close:()=>void;children:ReactNode}) {
+export default function Overlay({label,close,children,panelClassName=""}:{label:string;close:()=>void;children:ReactNode;panelClassName?:string}) {
   const panel=useRef<HTMLDivElement>(null);const closeRef=useRef(close);closeRef.current=close;
   useEffect(()=>{
     const previous=document.activeElement as HTMLElement|null;
@@ -21,5 +21,5 @@ export default function Overlay({label,close,children}:{label:string;close:()=>v
     document.addEventListener('keydown',key);
     return()=>{document.body.style.overflow=overflow;document.removeEventListener('keydown',key);if(previous?.isConnected)previous.focus({preventScroll:true});};
   },[]);
-  return <div className="modal-backdrop" onPointerDown={e=>{if(e.target===e.currentTarget)close();}}><div className="ad-modal" ref={panel} role="dialog" aria-modal="true" aria-label={label} tabIndex={-1}>{children}</div></div>;
+  return <div className="modal-backdrop" onPointerDown={e=>{if(e.target===e.currentTarget)close();}}><div className={`ad-modal ${panelClassName}`} ref={panel} role="dialog" aria-modal="true" aria-label={label} tabIndex={-1}>{children}</div></div>;
 }
